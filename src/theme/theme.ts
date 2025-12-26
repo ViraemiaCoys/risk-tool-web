@@ -55,8 +55,9 @@ export const app_theme = createTheme({
         root: {
           backgroundImage: "none",
           border: `1px solid ${alpha("#ffffff", 0.08)}`,
-          backgroundColor: alpha("#111827", 0.75),
-          boxShadow: "0 12px 40px rgba(0,0,0,0.35)",
+          backgroundColor: alpha("#0f172a", 0.72),
+          boxShadow: "0 10px 30px rgba(0,0,0,0.45)",
+          backdropFilter: "blur(6px)",
         },
       },
     },
