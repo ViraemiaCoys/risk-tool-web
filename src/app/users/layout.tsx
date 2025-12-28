@@ -1,5 +1,5 @@
-import AppShell from "@/components/AppShell";
+import type { ReactNode } from "react";
 
-export default function UsersLayout({ children }: { children: React.ReactNode }) {
-  return <AppShell title="Users">{children}</AppShell>;
+export default function UsersLayout({ children }: { children: ReactNode }) {
+  return children;
 }

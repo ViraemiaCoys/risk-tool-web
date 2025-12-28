@@ -1,11 +1,5 @@
-// src/app/page.tsx
-import AppShell from "@/components/AppShell";
-import Dashboard from "@/components/Dashboard";
+import Dashboard from "@/components/dashboard/Dashboard";
 
-export default function HomePage() {
-  return (
-    <AppShell title="Dashboard">
-      <Dashboard />
-    </AppShell>
-  );
+export default function Page() {
+  return <Dashboard />;
 }

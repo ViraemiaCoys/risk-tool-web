@@ -29,6 +29,7 @@ export default function Header(props: { title: string }) {
       position="sticky"
       elevation={0}
       sx={{
+        width: '100%',
         backgroundColor: "rgba(18,18,18,0.85)",
         backdropFilter: "blur(10px)",
         borderBottom: "1px solid rgba(255,255,255,0.08)",

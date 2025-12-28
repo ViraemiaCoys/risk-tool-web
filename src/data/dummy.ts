@@ -1,5 +1,5 @@
 /* =======================
-   user types & data
+   users (list/edit pages)
    ======================= */
 
 export type user_status = "active" | "pending" | "banned";
@@ -12,43 +12,14 @@ export type user_row = {
   status: user_status;
 };
 
-export const users: user_row[] = [
-  {
-    user_id: "u-0001",
-    name: "Angelique Morse",
-    email: "anny89@yahoo.com",
-    role: "content creator",
-    status: "banned",
-  },
-  {
-    user_id: "u-0002",
-    name: "Ariana Lang",
-    email: "avery43@hotmail.com",
-    role: "it administrator",
-    status: "pending",
-  },
-  {
-    user_id: "u-0003",
-    name: "Aspen Schmitt",
-    email: "mireya13@hotmail.com",
-    role: "financial planner",
-    status: "banned",
-  },
-  {
-    user_id: "u-0004",
-    name: "Brycen Jimenez",
-    email: "tyrel.greenholt@gmail.com",
-    role: "hr recruiter",
-    status: "active",
-  },
-  {
-    user_id: "u-0005",
-    name: "Chase Day",
-    email: "joana.simonis84@gmail.com",
-    role: "graphic designer",
-    status: "banned",
-  },
-];
+/**
+ * 这里不再在 dummy.ts 里重复维护用户数组，
+ * 直接复用你现成的 user.mock.ts 里的 users_list_rows
+ */
+import { users_list_rows } from "@/data/user.mock";
+
+// ✅ 兼容你当前代码：很多页面写的是 import { users } from "@/data/dummy"
+export const users: user_row[] = users_list_rows;
 
 /* =======================
    company types & data
@@ -57,10 +28,11 @@ export const users: user_row[] = [
 export type company_row = {
   company_code: string;
   company_name: string;
-  level: number;
+  level: number; // 1..3
   country: string;
   city: string;
   founded_year: number;
+  joined_year: number; // ✅ 新增：加入供应链网络年份（用于右侧折线图）
   annual_revenue: number; // USD (real amount)
   employees: number;
 };
@@ -148,6 +120,25 @@ function pseudo_rand(seed: number) {
   return x - Math.floor(x);
 }
 
+/**
+ * 生成 joined_year 的策略：
+ * - 范围固定在 2010..2024（更“均匀”且更像真实 onboarding）
+ * - 用 pseudo_rand 保证每次重启数据稳定（不会刷新就变）
+ */
+function make_joined_year(idx: number) {
+  const min_year = 2010;
+  const max_year = 2024;
+
+  // 0..1 稳定随机
+  const r = pseudo_rand(idx + 777);
+
+  // 用平方把概率往“后期”挤：r^2 更偏小 -> 反过来 (1 - r^2) 更偏大
+  const skew = 1 - r * r; // 更偏向 1
+  const year = Math.round(min_year + skew * (max_year - min_year));
+
+  return clamp_int(year, min_year, max_year);
+}
+
 function make_company(idx: number): company_row {
   const geo = seed_geo[idx % seed_geo.length];
   const name = seed_names[idx % seed_names.length];
@@ -155,8 +146,14 @@ function make_company(idx: number): company_row {
   const level = 1 + (idx % 3); // 1..3
   const founded_year = clamp_int(1900 + pseudo_rand(idx + 13) * 125, 1900, 2024);
 
+  const joined_year = make_joined_year(idx);
+
   // revenue: 20m..2.2b
-  const revenue = clamp_int(20_000_000 + pseudo_rand(idx + 71) * 2_180_000_000, 5_000_000, 3_000_000_000);
+  const revenue = clamp_int(
+    20_000_000 + pseudo_rand(idx + 71) * 2_180_000_000,
+    5_000_000,
+    3_000_000_000
+  );
 
   // employees: 50..12,000
   const employees = clamp_int(50 + pseudo_rand(idx + 101) * 11_950, 10, 30_000);
@@ -170,10 +167,39 @@ function make_company(idx: number): company_row {
     country: geo.country,
     city: geo.city,
     founded_year,
+    joined_year,
     annual_revenue: revenue,
     employees,
   };
 }
 
-// 先生成 50 家公司（你也可以改成 40/60）
-export const companies: company_row[] = Array.from({ length: 50 }, (_, i) => make_company(i));
+// ✅ 你说想要 40 条左右：这里改成 40（你也可以随时改回 50）
+export const companies: company_row[] = Array.from({ length: 40 }, (_, i) => make_company(i));
+
+/* =======================
+   helpers for charts (optional exports)
+   ======================= */
+
+// donut: 不同 level 占比
+export const company_level_counts = [1, 2, 3].map((lvl) => ({
+  level: lvl,
+  count: companies.filter((c) => c.level === lvl).length,
+}));
+
+// line: 按 joined_year 统计每年新增 & 累积
+export const cumulative_companies_by_year = (() => {
+  const years = Array.from(new Set(companies.map((c) => c.joined_year))).sort((a, b) => a - b);
+
+  const add_by_year = years.map((y) => ({
+    year: y,
+    added: companies.filter((c) => c.joined_year === y).length,
+  }));
+
+  let cum = 0;
+  const cumulative = add_by_year.map((r) => {
+    cum += r.added;
+    return { year: r.year, cumulative: cum, added: r.added };
+  });
+
+  return cumulative;
+})();

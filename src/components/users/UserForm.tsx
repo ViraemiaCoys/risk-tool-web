@@ -94,7 +94,7 @@ export default function UserForm(props: {
   } as const;
 
   return (
-    <Box sx={{ maxWidth: 1200, mx: "auto", width: "100%" }}>
+    <Box sx={{ width: "100%", minWidth: 0 }}>
       <Typography variant="h4" fontWeight={800} sx={{ mb: 0.5 }}>
         {mode === "create" ? "Create a new user" : "Edit user"}
       </Typography>

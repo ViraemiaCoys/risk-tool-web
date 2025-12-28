@@ -1,5 +1,5 @@
-import AppShell from "@/components/AppShell";
+import type { ReactNode } from "react";
 
-export default function CompaniesLayout({ children }: { children: React.ReactNode }) {
-  return <AppShell title="Companies">{children}</AppShell>;
+export default function CompaniesLayout({ children }: { children: ReactNode }) {
+  return children;
 }
