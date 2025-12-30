@@ -76,7 +76,7 @@ export default function CumulativeLine({ companies, start_year, end_year }: Prop
         grid: { color: "rgba(255,255,255,0.06)" },
         ticks: {
           color: "rgba(255,255,255,0.6)",
-          autoSkip: true,
+          autoSkip: false,
           maxTicksLimit: 8,
           maxRotation: 0,
           minRotation: 0,

@@ -111,7 +111,7 @@ export default function LevelDonut() {
       }
     >
       {/* Chart canvas */}
-      <Box sx={{ position: "absolute", inset: 0 }}>
+      <Box sx={{ width: "100%", height: "100%" }}>
         <Doughnut data={data} options={options} />
       </Box>
 

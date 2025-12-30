@@ -62,9 +62,30 @@ function to_role_short(role: string) {
   return role.split(" ")[0] || role;
 }
 
-function stat_card(props: { follower: string; following: string }) {
+/** ===== unified dark glass card style ===== */
+const glass_card_sx = {
+  borderRadius: 4,
+  background: "rgba(255,255,255,0.03)",
+  border: "1px solid rgba(255,255,255,0.10)",
+  backdropFilter: "blur(10px)",
+  boxShadow: "0 18px 40px rgba(0,0,0,0.35)",
+} as const;
+
+const dark_textfield_sx = {
+  "& .MuiOutlinedInput-root": {
+    borderRadius: 3,
+    backgroundColor: "rgba(255,255,255,0.03)",
+    "& fieldset": { borderColor: "rgba(255,255,255,0.14)" },
+    "&:hover fieldset": { borderColor: "rgba(255,255,255,0.22)" },
+    "&.Mui-focused fieldset": { borderColor: "rgba(46, 204, 113, 0.9)" },
+  },
+  "& .MuiInputBase-input": { color: "rgba(255,255,255,0.92)" },
+  "& .MuiOutlinedInput-input": { color: "rgba(255,255,255,0.92)" },
+} as const;
+
+function StatCard(props: { follower: string; following: string }) {
   return (
-    <Card sx={{ borderRadius: 3 }}>
+    <Card sx={{ ...glass_card_sx, width: "100%" }}>
       <CardContent sx={{ py: 2.5 }}>
         <Stack
           direction="row"
@@ -73,7 +94,7 @@ function stat_card(props: { follower: string; following: string }) {
             <Divider
               orientation="vertical"
               flexItem
-              sx={{ mx: 2, borderColor: "rgba(255,255,255,0.12)" }}
+              sx={{ mx: 2, borderColor: "rgba(255,255,255,0.10)" }}
             />
           }
         >
@@ -82,7 +103,7 @@ function stat_card(props: { follower: string; following: string }) {
               {props.follower}
             </Typography>
             <Typography variant="body2" sx={{ opacity: 0.7 }}>
-              Follower
+              Followers
             </Typography>
           </Box>
 
@@ -100,36 +121,42 @@ function stat_card(props: { follower: string; following: string }) {
   );
 }
 
-function about_card(props: { user: any }) {
+function AboutCard(props: { user: any }) {
   const { user } = props;
 
   return (
-    <Card sx={{ borderRadius: 3 }}>
+    <Card sx={{ ...glass_card_sx, width: "100%" }}>
       <CardContent>
-        <Typography sx={{ fontWeight: 900, fontSize: 18, mb: 1 }}>About</Typography>
+        <Typography sx={{ fontWeight: 900, fontSize: 18, mb: 1 }}>
+          About
+        </Typography>
 
-        <Typography variant="body2" sx={{ opacity: 0.8, lineHeight: 1.8 }}>
-          Tart I love sugar plum I love oat cake. Sweet roll caramels I love jujubes. Topping cake wafer...
+        <Typography variant="body2" sx={{ opacity: 0.82, lineHeight: 1.8 }}>
+          Tart I love sugar plum I love oat cake. Sweet roll caramels I love
+          jujubes. Topping cake wafer...
         </Typography>
 
         <Stack spacing={1.25} sx={{ mt: 2 }}>
           <Stack direction="row" spacing={1.25} alignItems="center">
-            <LocationOnIcon fontSize="small" />
-            <Typography variant="body2" sx={{ opacity: 0.85 }}>
+            <LocationOnIcon fontSize="small" sx={{ opacity: 0.75 }} />
+            <Typography variant="body2" sx={{ opacity: 0.9 }}>
               Live at <b>United Kingdom</b>
             </Typography>
           </Stack>
 
           <Stack direction="row" spacing={1.25} alignItems="center">
-            <EmailIcon fontSize="small" />
-            <Typography variant="body2" sx={{ opacity: 0.85 }}>
+            <EmailIcon fontSize="small" sx={{ opacity: 0.75 }} />
+            <Typography variant="body2" sx={{ opacity: 0.9 }}>
               {user.email}
             </Typography>
           </Stack>
 
           <Stack direction="row" spacing={1.25} alignItems="center">
-            <WorkIcon fontSize="small" />
-            <Typography variant="body2" sx={{ opacity: 0.85, textTransform: "capitalize" }}>
+            <WorkIcon fontSize="small" sx={{ opacity: 0.75 }} />
+            <Typography
+              variant="body2"
+              sx={{ opacity: 0.9, textTransform: "capitalize" }}
+            >
               {user.role} at <b>Gleichner, Mueller and Tromp</b>
             </Typography>
           </Stack>
@@ -139,19 +166,26 @@ function about_card(props: { user: any }) {
   );
 }
 
-function composer_card() {
+function ComposerCard() {
   return (
-    <Card sx={{ borderRadius: 3 }}>
-      <CardContent sx={{ pb: 2 }}>
+    <Card sx={{ ...glass_card_sx, width: "100%" }}>
+      <CardContent sx={{ pb: 2.2 }}>
         <TextField
           fullWidth
           multiline
           minRows={4}
           placeholder="Share what you are thinking here..."
+          sx={dark_textfield_sx}
         />
 
-        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mt: 2 }}>
-          <Stack direction="row" spacing={1}>
+        <Stack
+          direction={{ xs: "column", sm: "row" }}
+          alignItems={{ xs: "stretch", sm: "center" }}
+          justifyContent="space-between"
+          sx={{ mt: 2 }}
+          spacing={1.5}
+        >
+          <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap" }}>
             <Chip
               icon={
                 <Box sx={{ display: "flex", alignItems: "center" }}>
@@ -161,19 +195,35 @@ function composer_card() {
               }
               label="Image/Video"
               variant="outlined"
-              sx={{ fontWeight: 700 }}
+              sx={{
+                fontWeight: 800,
+                borderColor: "rgba(255,255,255,0.16)",
+                color: "rgba(255,255,255,0.85)",
+                bgcolor: "rgba(255,255,255,0.02)",
+              }}
             />
             <Chip
               icon={<LiveTvIcon fontSize="small" />}
               label="Streaming"
               variant="outlined"
-              sx={{ fontWeight: 700 }}
+              sx={{
+                fontWeight: 800,
+                borderColor: "rgba(255,255,255,0.16)",
+                color: "rgba(255,255,255,0.85)",
+                bgcolor: "rgba(255,255,255,0.02)",
+              }}
             />
           </Stack>
 
           <Button
             variant="contained"
-            sx={{ borderRadius: 2, fontWeight: 800, textTransform: "none" }}
+            sx={{
+              borderRadius: 999,
+              fontWeight: 900,
+              textTransform: "none",
+              px: 3,
+              alignSelf: { xs: "flex-end", sm: "auto" },
+            }}
           >
             Post
           </Button>
@@ -183,11 +233,11 @@ function composer_card() {
   );
 }
 
-function feed_post_card(props: { post: post_item }) {
+function FeedPostCard(props: { post: post_item }) {
   const { post } = props;
 
   return (
-    <Card sx={{ borderRadius: 3 }}>
+    <Card sx={{ ...glass_card_sx, width: "100%" }}>
       <CardContent>
         <Stack direction="row" alignItems="center" justifyContent="space-between">
           <Stack direction="row" spacing={1.25} alignItems="center">
@@ -205,7 +255,10 @@ function feed_post_card(props: { post: post_item }) {
           </IconButton>
         </Stack>
 
-        <Typography variant="body2" sx={{ mt: 2, opacity: 0.85, lineHeight: 1.8 }}>
+        <Typography
+          variant="body2"
+          sx={{ mt: 2, opacity: 0.88, lineHeight: 1.8 }}
+        >
           {post.content}
         </Typography>
       </CardContent>
@@ -213,7 +266,7 @@ function feed_post_card(props: { post: post_item }) {
   );
 }
 
-function profile_header(props: {
+function ProfileHeader(props: {
   user: any;
   tab: profile_tab_key;
   on_tab_change: (v: profile_tab_key) => void;
@@ -221,92 +274,141 @@ function profile_header(props: {
   const { user, tab, on_tab_change } = props;
 
   return (
-    <Card sx={{ borderRadius: 3, overflow: "hidden" }}>
+    <Card sx={{ ...glass_card_sx, overflow: "hidden", width: "100%" }}>
       <Box sx={{ position: "relative" }}>
         <CardMedia
           component="img"
           image={user.cover_url}
           alt="cover"
           sx={{
-            height: { xs: 220, md: 280 },
+            height: { xs: 200, md: 280 },
             objectFit: "cover",
             filter: "saturate(1.05)",
           }}
         />
 
-        {/* 底部“底座” */}
+        {/* dark glass overlay bar */}
         <Box
           sx={{
             position: "absolute",
-            left: 0,
-            right: 0,
-            bottom: 0,
-            height: { xs: 110, md: 120 },
-            bgcolor: "background.paper",
-            borderTopLeftRadius: 24,
-            borderTopRightRadius: 24,
-          }}
-        />
-
-        {/* avatar + name */}
-        <Box
-          sx={{
-            position: "absolute",
-            left: { xs: 20, md: 28 },
-            bottom: { xs: 28, md: 30 },
+            left: 16,
+            right: 16,
+            bottom: 16,
+            borderRadius: 4,
+            background: "rgba(10,10,10,0.55)",
+            border: "1px solid rgba(255,255,255,0.10)",
+            backdropFilter: "blur(12px)",
+            px: { xs: 2, md: 3 },
+            py: { xs: 2, md: 2.2 },
             display: "flex",
             alignItems: "center",
             gap: 2,
+            flexWrap: "wrap",
+            minWidth: 0,
           }}
         >
+          {/* avatar */}
           <Box
             sx={{
-              width: 86,
-              height: 86,
+              width: 74,
+              height: 74,
               borderRadius: "50%",
-              bgcolor: "background.paper",
+              bgcolor: "rgba(0,0,0,0.35)",
+              border: "1px solid rgba(255,255,255,0.14)",
               display: "grid",
               placeItems: "center",
-              boxShadow: "0 10px 25px rgba(0,0,0,0.25)",
+              flexShrink: 0,
             }}
           >
-            <Avatar src={user.avatar_url} alt={user.name} sx={{ width: 72, height: 72 }} />
+            <Avatar
+              src={user.avatar_url}
+              alt={user.name}
+              sx={{ width: 62, height: 62 }}
+            />
           </Box>
 
-          <Box sx={{ mt: 1 }}>
-            <Typography sx={{ fontSize: 24, fontWeight: 900, lineHeight: 1.1 }}>
+          {/* name + role */}
+          <Box sx={{ minWidth: 180, flex: "1 1 auto", minHeight: 1 }}>
+            <Typography sx={{ fontSize: 22, fontWeight: 900, lineHeight: 1.15 }}>
               {to_title_case(user.name)}
             </Typography>
-            <Typography variant="body2" sx={{ opacity: 0.7, textTransform: "uppercase" }}>
+            <Typography
+              variant="body2"
+              sx={{
+                opacity: 0.75,
+                textTransform: "uppercase",
+                fontWeight: 700,
+                letterSpacing: 0.5,
+              }}
+            >
               {to_role_short(user.role)}
             </Typography>
           </Box>
-        </Box>
 
-        {/* tabs */}
-        <Box sx={{ position: "absolute", right: { xs: 12, md: 18 }, bottom: 6 }}>
-          <Tabs
-            value={tab}
-            onChange={(_, v) => on_tab_change(v)}
-            textColor="inherit"
-            indicatorColor="primary"
-            sx={{
-              minHeight: 44,
-              "& .MuiTab-root": {
+          {/* tabs */}
+          <Box sx={{ flex: "1 1 520px", minWidth: 280 }}>
+            <Tabs
+              value={tab}
+              onChange={(_, v) => on_tab_change(v)}
+              variant="scrollable"
+              scrollButtons="auto"
+              textColor="inherit"
+              indicatorColor="primary"
+              sx={{
                 minHeight: 44,
-                textTransform: "none",
-                fontWeight: 800,
-                opacity: 0.85,
-              },
-            }}
-          >
-            <Tab value="profile" icon={<PersonIcon fontSize="small" />} iconPosition="start" label="Profile" />
-            <Tab value="followers" icon={<FavoriteIcon fontSize="small" />} iconPosition="start" label="Followers" />
-            <Tab value="friends" icon={<GroupIcon fontSize="small" />} iconPosition="start" label="Friends" />
-            <Tab value="gallery" icon={<PhotoLibraryIcon fontSize="small" />} iconPosition="start" label="Gallery" />
-          </Tabs>
+                "& .MuiTab-root": {
+                  minHeight: 44,
+                  textTransform: "none",
+                  fontWeight: 900,
+                  opacity: 0.85,
+                  px: 2,
+                },
+              }}
+            >
+              <Tab
+                value="profile"
+                icon={<PersonIcon fontSize="small" />}
+                iconPosition="start"
+                label="Profile"
+              />
+              <Tab
+                value="followers"
+                icon={<FavoriteIcon fontSize="small" />}
+                iconPosition="start"
+                label="Followers"
+              />
+              <Tab
+                value="friends"
+                icon={<GroupIcon fontSize="small" />}
+                iconPosition="start"
+                label="Friends"
+              />
+              <Tab
+                value="gallery"
+                icon={<PhotoLibraryIcon fontSize="small" />}
+                iconPosition="start"
+                label="Gallery"
+              />
+            </Tabs>
+          </Box>
         </Box>
       </Box>
+    </Card>
+  );
+}
+
+function PlaceholderTabCard(props: { title: string }) {
+  return (
+    <Card sx={{ ...glass_card_sx, width: "100%" }}>
+      <CardContent>
+        <Typography sx={{ fontWeight: 900, fontSize: 18, mb: 1 }}>
+          {props.title}
+        </Typography>
+        <Divider sx={{ mb: 2, borderColor: "rgba(255,255,255,0.10)" }} />
+        <Typography variant="body2" sx={{ opacity: 0.82 }}>
+          This tab is a placeholder. You can wire it to real data later.
+        </Typography>
+      </CardContent>
     </Card>
   );
 }
@@ -320,24 +422,21 @@ export default function Page() {
     [user_id]
   );
 
-  // 如果你想要严格 404，可以改成 notFound(); 现在先显示诊断信息更直观
+  const [tab, set_tab] = React.useState<profile_tab_key>("profile");
+
   if (!user) {
     return (
-      <Box sx={{ px: { xs: 2, md: 3 }, py: 3 }}>
+      <Box sx={{ width: "100%", minWidth: 0, px: { xs: 2, md: 3 }, py: 3 }}>
         <Typography variant="h4" sx={{ fontWeight: 900 }}>
           Profile
         </Typography>
-        <Typography sx={{ mt: 1, opacity: 0.8 }}>
-          user not found: {user_id}
-        </Typography>
+        <Typography sx={{ mt: 1, opacity: 0.8 }}>user not found: {user_id}</Typography>
         <Typography sx={{ mt: 1, opacity: 0.8 }}>
           available ids: {users_mock.map((x: any) => x.user_id).join(", ")}
         </Typography>
       </Box>
     );
   }
-
-  const [tab, set_tab] = React.useState<profile_tab_key>("profile");
 
   const posts: post_item[] = [
     {
@@ -359,7 +458,15 @@ export default function Page() {
   ];
 
   return (
-    <Box sx={{ px: { xs: 2, md: 3 }, py: 3 }}>
+    <Box
+      sx={{
+        width: "100%",
+        maxWidth: "none",
+        minWidth: 0,
+        px: { xs: 2, md: 3 }, // ✅ 给页面一个正常产品的内边距（你之前是 0）
+        py: { xs: 2, md: 3 },
+      }}
+    >
       {/* title + breadcrumb */}
       <Box sx={{ mb: 2.5 }}>
         <Typography variant="h4" sx={{ fontWeight: 900, mb: 0.75 }}>
@@ -372,45 +479,44 @@ export default function Page() {
 
       {/* header */}
       <Box sx={{ mb: 3 }}>
-        {profile_header({ user, tab, on_tab_change: set_tab })}
+        <ProfileHeader user={user} tab={tab} on_tab_change={set_tab} />
       </Box>
 
       {/* body */}
-      <Grid container spacing={3}>
-        <Grid item xs={12} md={4}>
-          <Stack spacing={3}>
-            {stat_card({ follower: user.followers, following: user.following })}
-            {about_card({ user })}
+      <Grid container spacing={3} alignItems="stretch">
+        {/* ✅ 左小右大：从 md 就开始，不要等 lg */}
+        <Grid item xs={12} md={4} lg={4}>
+          <Stack spacing={3} sx={{ minWidth: 0 }}>
+            <StatCard follower={user.followers} following={user.following} />
+            <AboutCard user={user} />
           </Stack>
         </Grid>
 
-        <Grid item xs={12} md={8}>
-          <Stack spacing={3}>
-            {composer_card()}
+        <Grid item xs={12} md={8} >
+          {/* ✅ 右侧不允许“收缩” */}
+          <Stack spacing={3} sx={{ minWidth: 0 }}>
+            <ComposerCard />
 
-            {tab === "profile" ? (
-              <Stack spacing={3}>
-                {posts.map((p) => (
-                  <Box key={p.id}>{feed_post_card({ post: p })}</Box>
-                ))}
-              </Stack>
-            ) : (
-              <Card sx={{ borderRadius: 3 }}>
-                <CardContent>
-                  <Typography sx={{ fontWeight: 900, fontSize: 18, mb: 1 }}>
-                    {tab === "followers"
+            {/* ✅ 内容区容器：固定宽度 + 最小高度，切 tab 不会视觉塌陷/像缩小 */}
+            <Box sx={{ width: "100%", minWidth: 0, minHeight: 360 }}>
+              {tab === "profile" ? (
+                <Stack spacing={3} sx={{ width: "100%", minWidth: 0 }}>
+                  {posts.map((p) => (
+                    <FeedPostCard key={p.id} post={p} />
+                  ))}
+                </Stack>
+              ) : (
+                <PlaceholderTabCard
+                  title={
+                    tab === "followers"
                       ? "Followers"
                       : tab === "friends"
                       ? "Friends"
-                      : "Gallery"}
-                  </Typography>
-                  <Divider sx={{ mb: 2 }} />
-                  <Typography variant="body2" sx={{ opacity: 0.8 }}>
-                    This tab is a placeholder. You can wire it to real data later.
-                  </Typography>
-                </CardContent>
-              </Card>
-            )}
+                      : "Gallery"
+                  }
+                />
+              )}
+            </Box>
           </Stack>
         </Grid>
       </Grid>
