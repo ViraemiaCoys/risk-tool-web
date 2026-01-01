@@ -7,6 +7,8 @@ import { companies } from "@/data/dummy";
 import LevelDonut from "@/components/dashboard/LevelDonut";
 import CumulativeLine from "@/components/dashboard/CumulativeLine";
 import KpiCard from "@/components/dashboard/KpiCard";
+import CompanyBarChart from "@/components/dashboard/CompanyBarChart";
+
 
 function format_compact_number(n: number) {
   const abs = Math.abs(n);
@@ -192,6 +194,12 @@ export default function Dashboard() {
                 </Box>
               </CardContent>
             </Card>
+          </Grid>
+        </Grid>
+        {/* dynamic bar chart (new week) */}
+        <Grid container spacing={3} sx={{ minWidth: 0 }}>
+          <Grid size={{ xs: 12 }} sx={{ minWidth: 0 }}>
+            <CompanyBarChart companies={companies} />
           </Grid>
         </Grid>
       </Stack>

@@ -498,7 +498,7 @@ export default function Page() {
             <ComposerCard />
 
             {/* ✅ 内容区容器：固定宽度 + 最小高度，切 tab 不会视觉塌陷/像缩小 */}
-            <Box sx={{ width: "100%", minWidth: 0, minHeight: 360 }}>
+            <Box sx={{ width: "100%", minWidth: 0, minHeight: 500 }}>
               {tab === "profile" ? (
                 <Stack spacing={3} sx={{ width: "100%", minWidth: 0 }}>
                   {posts.map((p) => (
