@@ -111,7 +111,6 @@ function apply_company_filters(companies: company_row[], request: company_bar_re
 
     // ✅ joined_year range (加入供应链年份)
     const joined_range = filter.joined_year ?? { start: undefined, end: undefined };
-
     if (joined_range.start !== undefined && company.joined_year < joined_range.start) return false;
     if (joined_range.end !== undefined && company.joined_year > joined_range.end) return false;
 
@@ -154,6 +153,29 @@ export default function CompanyBarChart(props: { companies: company_row[] }) {
   // top search keyword to filter option lists (country/city)
   const [option_search, set_option_search] = React.useState("");
 
+  // ✅ migrate old state shape after Fast Refresh (founded_year -> joined_year)
+  React.useEffect(() => {
+    set_request((prev) => {
+      const prev_any: any = prev as any;
+      const prev_filter: any = prev_any?.filter ?? {};
+
+      const joined_year =
+        prev_filter.joined_year ??
+        prev_filter.founded_year ?? // legacy
+        DEFAULT_REQUEST.filter.joined_year;
+
+      return {
+        ...DEFAULT_REQUEST,
+        ...prev_any,
+        filter: {
+          ...DEFAULT_REQUEST.filter,
+          ...prev_filter,
+          joined_year,
+        },
+      } as company_bar_request;
+    });
+  }, []);
+
   // bounds from data (for sliders)
   const bounds = React.useMemo(() => {
     const joined_years = companies.map((c) => c.joined_year);
@@ -168,7 +190,10 @@ export default function CompanyBarChart(props: { companies: company_row[] }) {
   }, [companies]);
 
   // options
-  const country_options_all = React.useMemo(() => uniq_sorted(companies.map((c) => c.country)), [companies]);
+  const country_options_all = React.useMemo(
+    () => uniq_sorted(companies.map((c) => c.country)),
+    [companies]
+  );
 
   const city_options_all = React.useMemo(() => {
     const scoped = request.filter.country.length
@@ -204,23 +229,23 @@ export default function CompanyBarChart(props: { companies: company_row[] }) {
 
   // slider derived values (fallback to bounds when unset)
   const joined_year_slider_value: [number, number] = React.useMemo(() => {
-    const start = request.filter.joined_year.start ?? bounds.joined.min;
-    const end = request.filter.joined_year.end ?? bounds.joined.max;
+    const joined = request.filter.joined_year ?? {};
+    const start = joined.start ?? bounds.joined.min;
+    const end = joined.end ?? bounds.joined.max;
+
     return [
       clamp(start, bounds.joined.min, bounds.joined.max),
       clamp(end, bounds.joined.min, bounds.joined.max),
     ];
-  }, [
-    request.filter.joined_year.start,
-    request.filter.joined_year.end,
-    bounds.joined.min,
-    bounds.joined.max,
-  ]);
+  }, [request.filter.joined_year, bounds.joined.min, bounds.joined.max]);
 
   const revenue_slider_value: [number, number] = React.useMemo(() => {
     const min = request.filter.annual_revenue.min ?? bounds.revenue.min;
     const max = request.filter.annual_revenue.max ?? bounds.revenue.max;
-    return [clamp(min, bounds.revenue.min, bounds.revenue.max), clamp(max, bounds.revenue.min, bounds.revenue.max)];
+    return [
+      clamp(min, bounds.revenue.min, bounds.revenue.max),
+      clamp(max, bounds.revenue.min, bounds.revenue.max),
+    ];
   }, [
     request.filter.annual_revenue.min,
     request.filter.annual_revenue.max,
@@ -361,7 +386,14 @@ export default function CompanyBarChart(props: { companies: company_row[] }) {
           <Grid size={{ xs: 12, md: 4 }} sx={{ minWidth: 0 }}>
             <Stack spacing={1.5}>
               {/* header: reset + search */}
-              <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1.5 }}>
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 1.5,
+                }}
+              >
                 <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
                   Filters
                 </Typography>
@@ -404,6 +436,8 @@ export default function CompanyBarChart(props: { companies: company_row[] }) {
                 multiple
                 options={level_options}
                 value={request.filter.level}
+                getOptionLabel={(option) => `level ${option}`} // ✅ 必须返回 string
+                isOptionEqualToValue={(option, value) => option === value}
                 onChange={(_, value) =>
                   set_request((prev) => ({
                     ...prev,
@@ -483,6 +517,7 @@ export default function CompanyBarChart(props: { companies: company_row[] }) {
                       const start = parse_number_or_undefined(event.target.value);
                       set_request((prev) => {
                         const normalized = normalize_min_max(start, prev.filter.joined_year.end);
+
                         const next_start =
                           normalized.min === undefined
                             ? undefined
@@ -513,6 +548,7 @@ export default function CompanyBarChart(props: { companies: company_row[] }) {
                       const end = parse_number_or_undefined(event.target.value);
                       set_request((prev) => {
                         const normalized = normalize_min_max(prev.filter.joined_year.start, end);
+
                         const next_start =
                           normalized.min === undefined
                             ? prev.filter.joined_year.start
@@ -571,6 +607,7 @@ export default function CompanyBarChart(props: { companies: company_row[] }) {
                       const min = parse_number_or_undefined(event.target.value);
                       set_request((prev) => {
                         const normalized = normalize_min_max(min, prev.filter.annual_revenue.max);
+
                         const next_min =
                           normalized.min === undefined
                             ? undefined
@@ -602,6 +639,7 @@ export default function CompanyBarChart(props: { companies: company_row[] }) {
                       const max = parse_number_or_undefined(event.target.value);
                       set_request((prev) => {
                         const normalized = normalize_min_max(prev.filter.annual_revenue.min, max);
+
                         const next_min =
                           normalized.min === undefined
                             ? prev.filter.annual_revenue.min
@@ -660,6 +698,7 @@ export default function CompanyBarChart(props: { companies: company_row[] }) {
                       const min = parse_number_or_undefined(event.target.value);
                       set_request((prev) => {
                         const normalized = normalize_min_max(min, prev.filter.employees.max);
+
                         const next_min =
                           normalized.min === undefined
                             ? undefined
@@ -690,6 +729,7 @@ export default function CompanyBarChart(props: { companies: company_row[] }) {
                       const max = parse_number_or_undefined(event.target.value);
                       set_request((prev) => {
                         const normalized = normalize_min_max(prev.filter.employees.min, max);
+
                         const next_min =
                           normalized.min === undefined
                             ? prev.filter.employees.min
@@ -712,27 +752,6 @@ export default function CompanyBarChart(props: { companies: company_row[] }) {
                   />
                 </Grid>
               </Grid>
-
-              {/* request preview */}
-              <Divider sx={{ borderColor: "rgba(255,255,255,0.08)" }} />
-              <Typography variant="subtitle2" sx={{ fontWeight: 800, opacity: 0.9 }}>
-                request preview
-              </Typography>
-              <Box
-                component="pre"
-                sx={{
-                  m: 0,
-                  p: 1.25,
-                  borderRadius: 2,
-                  background: "rgba(0,0,0,0.25)",
-                  border: "1px solid rgba(255,255,255,0.08)",
-                  overflow: "auto",
-                  fontSize: 12,
-                  lineHeight: 1.35,
-                }}
-              >
-                {JSON.stringify(request, null, 2)}
-              </Box>
             </Stack>
           </Grid>
         </Grid>
