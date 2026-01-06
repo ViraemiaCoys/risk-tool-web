@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import * as d3 from "d3";
 import {
   Autocomplete,
   Box,
@@ -16,6 +17,8 @@ import {
   Stack,
   TextField,
   Typography,
+  Tabs,
+  Tab,
 } from "@mui/material";
 import Grid from "@mui/material/Grid";
 
@@ -26,13 +29,14 @@ import {
   CategoryScale,
   LinearScale,
   BarElement,
-  Tooltip,
+  Tooltip as ChartTooltip,
   Legend,
 } from "chart.js";
 
-import type { company_row } from "@/data/dummy";
+import type { company_row, company_relationship_row } from "@/data/dummy";
+import { company_relationships, build_company_hierarchy } from "@/data/dummy";
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend);
+ChartJS.register(CategoryScale, LinearScale, BarElement, ChartTooltip, Legend);
 
 type dimension_kind = "level" | "country" | "city";
 
@@ -52,7 +56,7 @@ export type company_bar_request = {
     level: number[];
     country: string[];
     city: string[];
-    joined_year: year_range_filter; // ✅ 加入供应链年份（2010..）
+    joined_year: year_range_filter;
     annual_revenue: range_filter;
     employees: range_filter;
   };
@@ -109,7 +113,6 @@ function apply_company_filters(companies: company_row[], request: company_bar_re
     if (filter.country.length > 0 && !filter.country.includes(company.country)) return false;
     if (filter.city.length > 0 && !filter.city.includes(company.city)) return false;
 
-    // ✅ joined_year range (加入供应链年份)
     const joined_range = filter.joined_year ?? { start: undefined, end: undefined };
     if (joined_range.start !== undefined && company.joined_year < joined_range.start) return false;
     if (joined_range.end !== undefined && company.joined_year > joined_range.end) return false;
@@ -145,10 +148,254 @@ function group_company_counts(filtered_companies: company_row[], dimension: dime
     .sort((left, right) => right.count - left.count);
 }
 
+/** =========================
+ * bubble (d3 circle packing)
+ * ========================= */
+type bubble_node = {
+  name: string;
+  company_code?: string;
+  country?: string;
+  city?: string;
+  level?: number;
+  annual_revenue?: number;
+  employees?: number;
+  joined_year?: number;
+  children?: bubble_node[];
+};
+
+function use_resize_observer<T extends HTMLElement>() {
+  const ref = React.useRef<T | null>(null);
+  const [size, set_size] = React.useState({ width: 0, height: 0 });
+
+  React.useEffect(() => {
+    if (!ref.current) return;
+
+    const el = ref.current;
+    const ro = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      const cr = entry.contentRect;
+      set_size({ width: Math.floor(cr.width), height: Math.floor(cr.height) });
+    });
+
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  return { ref, size };
+}
+
+function BubbleCirclePacking(props: {
+  companies: company_row[];
+  relationships: company_relationship_row[];
+  height: number;
+}) {
+  const { companies, relationships, height } = props;
+
+  const { ref, size } = use_resize_observer<HTMLDivElement>();
+
+  const svg_ref = React.useRef<SVGSVGElement | null>(null);
+
+  // tooltip (simple, MUI-free to keep it fast)
+  const tooltip_ref = React.useRef<HTMLDivElement | null>(null);
+
+  React.useEffect(() => {
+    if (!svg_ref.current) return;
+    if (!tooltip_ref.current) return;
+    if (size.width <= 10 || height <= 10) return;
+
+    const width = size.width;
+    const svg_height = height;
+
+    // build hierarchy data from relationships (already aligned with your example)
+    const tree = build_company_hierarchy(companies, relationships) as bubble_node;
+
+    // d3 setup
+    const svg = d3.select(svg_ref.current);
+    svg.selectAll("*").remove();
+
+    svg
+      .attr("viewBox", `0 0 ${width} ${svg_height}`)
+      .attr("width", width)
+      .attr("height", svg_height)
+      .style("display", "block");
+
+    const tooltip = d3.select(tooltip_ref.current);
+
+    const format = d3.format(",");
+
+    const root = d3
+      .hierarchy<bubble_node>(tree)
+      .sum((d) => {
+        // 你可以用 revenue / employees 来决定气泡大小；这里先用 employees 更直观
+        // 没有 employees 的节点（父节点）会由子节点累加
+        return d.employees ? Math.sqrt(d.employees) : 0;
+      })
+      .sort((a, b) => (b.value ?? 0) - (a.value ?? 0));
+
+    const pack = d3.pack<bubble_node>().size([width, svg_height]).padding(10);
+
+    pack(root);
+
+    let focus = root;
+    let view: [number, number, number] = [root.x, root.y, root.r * 2];
+
+    const g = svg.append("g");
+
+    const color = d3.scaleLinear<string>().domain([0, 3]).range(["rgba(0,229,255,0.25)", "rgba(0,229,255,0.85)"]);
+
+    const nodes = g
+      .selectAll("circle")
+      .data(root.descendants())
+      .join("circle")
+      .attr("display", (d) => (d.depth === 0 ? "none" : "block")) // ✅ root 不画
+      .attr("fill", (d) =>
+        d.children ? "rgba(0,229,255,0.05)" : "rgba(0,229,255,0.28)"
+      )
+      .attr("stroke", (d) =>
+        d.children ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.22)"
+      )
+      .attr("stroke-width", (d) => (d.children ? 1 : 1))
+      .on("mousemove", (event, d) => {
+        // optional tooltip：只对叶子节点展示详细信息
+        const data = d.data;
+        if (!data.company_code) return;
+
+        tooltip
+          .style("opacity", 1)
+          .style("left", `${event.offsetX + 14}px`)
+          .style("top", `${event.offsetY + 14}px`)
+          .html(
+            `
+            <div style="font-weight:800;margin-bottom:6px;">${data.name}</div>
+            <div style="opacity:0.85;font-size:12px;">
+              <div>code: ${data.company_code}</div>
+              <div>level: ${data.level ?? "-"}</div>
+              <div>geo: ${data.country ?? "-"} · ${data.city ?? "-"}</div>
+              <div>employees: ${data.employees !== undefined ? format(data.employees) : "-"}</div>
+              <div>revenue: ${data.annual_revenue !== undefined ? "$" + format(data.annual_revenue) : "-"}</div>
+              <div>joined: ${data.joined_year ?? "-"}</div>
+            </div>
+          `
+          );
+      })
+      .on("mouseleave", () => {
+        tooltip.style("opacity", 0);
+      })
+      .on("click", (event, d) => {
+        if (focus === d) return;
+
+        event.stopPropagation();
+        zoom(d);
+      });
+
+    const labels = g
+      .selectAll("text")
+      .data(root.descendants())
+      .join("text")
+      .attr("text-anchor", "middle")
+      .style("font-weight", 800)
+      .style("fill", "rgba(255,255,255,0.88)")
+      .style("pointer-events", "none")
+      .style("user-select", "none")
+      .style("display", (d) => (d.parent === root ? "block" : "none"))
+      .style("opacity", (d) => (d.parent === root ? 1 : 0))
+      .text((d) => {
+        const name = d.data.name ?? "";
+        // 防止太长顶出圈
+        return name.length > 16 ? `${name.slice(0, 16)}…` : name;
+      });
+
+    svg.on("click", () => zoom(root));
+
+    function zoom_to(v: [number, number, number]) {
+      const k = Math.min(width, svg_height) / v[2];
+      view = v;
+
+      labels.attr("transform", (d) => `translate(${(d.x - v[0]) * k+ width / 2},${(d.y - v[1]) * k+ svg_height / 2})`);
+      nodes
+        .attr("transform", (d) => `translate(${(d.x - v[0]) * k+ width / 2},${(d.y - v[1]) * k+ svg_height / 2})`)
+        .attr("r", (d) => d.r * k);
+    }
+
+    function zoom(d: typeof root) {
+      focus = d;
+
+      const transition = svg
+        .transition()
+        .duration(650)
+        .ease(d3.easeCubicInOut)
+        .tween("zoom", () => {
+          const i = d3.interpolateZoom(view, [focus.x, focus.y, focus.r * 2] as [number, number, number]);
+          return (t) => zoom_to(i(t));
+        });
+
+      labels
+        .filter(function (this: SVGTextElement, n) {
+          return n.parent === focus || (this.style.display === "block" as any);
+        })
+        .transition(transition as any)
+        .style("fill-opacity", (n) => (n.parent === focus ? 1 : 0))
+        .on("start", function (this: SVGTextElement, n) {
+          if (n.parent === focus) this.style.display = "block";
+        })
+        .on("end", function (this: SVGTextElement, n) {
+          if (n.parent !== focus) this.style.display = "none";
+        });
+    }
+
+    // initial fit
+    zoom_to([root.x, root.y, root.r * 2]);
+
+    return () => {
+      svg.selectAll("*").remove();
+    };
+  }, [companies, relationships, size.width, height]);
+
+  return (
+    <Box
+      ref={ref}
+      sx={{
+        position: "relative",
+        height,
+        width: "100%",
+        borderRadius: 3,
+        background: "rgba(255,255,255,0.02)",
+        border: "1px solid rgba(255,255,255,0.06)",
+        overflow: "hidden",
+      }}
+    >
+      <svg ref={svg_ref} />
+
+      {/* tooltip */}
+      <Box
+        ref={tooltip_ref}
+        sx={{
+          position: "absolute",
+          left: 0,
+          top: 0,
+          opacity: 0,
+          pointerEvents: "none",
+          zIndex: 10,
+          background: "rgba(0,0,0,0.75)",
+          border: "1px solid rgba(255,255,255,0.12)",
+          borderRadius: 2,
+          padding: "10px 12px",
+          minWidth: 220,
+          backdropFilter: "blur(10px)",
+        }}
+      />
+    </Box>
+  );
+}
+
+type chart_mode = "bar" | "bubble";
+
 export default function CompanyBarChart(props: { companies: company_row[] }) {
   const { companies } = props;
 
   const [request, set_request] = React.useState<company_bar_request>(() => DEFAULT_REQUEST);
+  const [mode, set_mode] = React.useState<chart_mode>("bar");
 
   // top search keyword to filter option lists (country/city)
   const [option_search, set_option_search] = React.useState("");
@@ -275,13 +522,12 @@ export default function CompanyBarChart(props: { companies: company_row[] }) {
     const labels = grouped.map((row) => row.label);
     const values = grouped.map((row) => row.count);
 
-    // ✅ dimension=level 时：红黄蓝；其他维度统一高亮色（黑底清晰）
     const bg_colors =
       request.dimension === "level"
         ? labels.map((label) => {
-            if (label.includes("1")) return "rgba(255, 82, 82, 0.88)"; // red
-            if (label.includes("2")) return "rgba(255, 214, 0, 0.88)"; // yellow
-            return "rgba(64, 156, 255, 0.88)"; // blue
+            if (label.includes("1")) return "rgba(255, 82, 82, 0.88)";
+            if (label.includes("2")) return "rgba(255, 214, 0, 0.88)";
+            return "rgba(64, 156, 255, 0.88)";
           })
         : labels.map(() => "rgba(0, 229, 255, 0.75)");
 
@@ -306,8 +552,6 @@ export default function CompanyBarChart(props: { companies: company_row[] }) {
           borderRadius: 10,
           hoverBorderColor: "rgba(255,255,255,0.65)",
           hoverBorderWidth: 1,
-
-          // ✅ 柱子更细（自适应 + 限制最大厚度）
           categoryPercentage: 0.58,
           barPercentage: 0.58,
           maxBarThickness: 22,
@@ -348,6 +592,13 @@ export default function CompanyBarChart(props: { companies: company_row[] }) {
     set_option_search("");
   }
 
+  // bubble chart uses shared filters too:
+  // 为了演示更合理：bubble 只显示过滤后的公司；缺失父节点时，会挂到 root（dummy builder 里处理）
+  const filtered_relationships = React.useMemo(() => {
+    const set = new Set(filtered_companies.map((c) => c.company_code));
+    return company_relationships.filter((r) => set.has(r.company_code));
+  }, [filtered_companies]);
+
   return (
     <Card
       sx={{
@@ -364,28 +615,58 @@ export default function CompanyBarChart(props: { companies: company_row[] }) {
             Company distribution
           </Typography>
           <Typography variant="body2" sx={{ opacity: 0.7 }}>
-            dynamic bar chart with dimension + multi-filters (Y = company count)
+            dynamic bar chart + bubble (circle packing) with shared multi-filters
           </Typography>
         </Box>
 
         <Grid container spacing={2.5} sx={{ minWidth: 0 }}>
           {/* left: chart */}
           <Grid size={{ xs: 12, md: 8 }} sx={{ minWidth: 0 }}>
-            <Box sx={{ height: { xs: 420, md: 460 }, minWidth: 0 }}>
-              <Bar data={chart_data} options={chart_options} />
-            </Box>
+            {/* tabs switch */}
+            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
+              <Tabs
+                value={mode}
+                onChange={(_, v) => set_mode(v)}
+                textColor="inherit"
+                indicatorColor="primary"
+                sx={{
+                  minHeight: 36,
+                  "& .MuiTab-root": { minHeight: 36, textTransform: "none", fontWeight: 900 },
+                }}
+              >
+                <Tab value="bar" label="bar chart" />
+                <Tab value="bubble" label="bubble (circle packing)" />
+              </Tabs>
 
-            <Box sx={{ mt: 1.5, opacity: 0.75 }}>
-              <Typography variant="caption">
-                Current result: {filtered_companies.length} companies after filters
+              <Typography variant="caption" sx={{ opacity: 0.75 }}>
+                current: {filtered_companies.length} companies after filters
               </Typography>
             </Box>
+
+            <Box sx={{ height: { xs: 420, md: 460 }, minWidth: 0 }}>
+              {mode === "bar" ? (
+                <Bar data={chart_data} options={chart_options} />
+              ) : (
+                <BubbleCirclePacking
+                  companies={filtered_companies}
+                  relationships={filtered_relationships}
+                  height={460}
+                />
+              )}
+            </Box>
+
+            {mode === "bar" && (
+              <Box sx={{ mt: 1.5, opacity: 0.75 }}>
+                <Typography variant="caption">
+                  Current result: {filtered_companies.length} companies after filters
+                </Typography>
+              </Box>
+            )}
           </Grid>
 
           {/* right: filters */}
           <Grid size={{ xs: 12, md: 4 }} sx={{ minWidth: 0 }}>
             <Stack spacing={1.5}>
-              {/* header: reset + search */}
               <Box
                 sx={{
                   display: "flex",
@@ -412,7 +693,6 @@ export default function CompanyBarChart(props: { companies: company_row[] }) {
 
               <Divider sx={{ borderColor: "rgba(255,255,255,0.08)" }} />
 
-              {/* dimension (single select) */}
               <FormControl fullWidth size="small">
                 <InputLabel>dimension</InputLabel>
                 <Select
@@ -431,12 +711,11 @@ export default function CompanyBarChart(props: { companies: company_row[] }) {
                 </Select>
               </FormControl>
 
-              {/* level multi-select */}
               <Autocomplete
                 multiple
                 options={level_options}
                 value={request.filter.level}
-                getOptionLabel={(option) => `level ${option}`} // ✅ 必须返回 string
+                getOptionLabel={(option) => `level ${option}`}
                 isOptionEqualToValue={(option, value) => option === value}
                 onChange={(_, value) =>
                   set_request((prev) => ({
@@ -447,7 +726,6 @@ export default function CompanyBarChart(props: { companies: company_row[] }) {
                 renderInput={(params) => <TextField {...params} size="small" label="level (multi)" />}
               />
 
-              {/* country multi-select (with search) */}
               <Autocomplete
                 multiple
                 options={country_options}
@@ -458,14 +736,13 @@ export default function CompanyBarChart(props: { companies: company_row[] }) {
                     filter: {
                       ...prev.filter,
                       country: value,
-                      city: [], // country changed => clear city to avoid illegal residuals
+                      city: [],
                     },
                   }))
                 }
                 renderInput={(params) => <TextField {...params} size="small" label="country (multi)" />}
               />
 
-              {/* city multi-select (with search) */}
               <Autocomplete
                 multiple
                 options={city_options}
@@ -481,7 +758,6 @@ export default function CompanyBarChart(props: { companies: company_row[] }) {
 
               <Divider sx={{ borderColor: "rgba(255,255,255,0.08)" }} />
 
-              {/* joined year range: slider + inputs */}
               <Typography variant="subtitle2" sx={{ fontWeight: 800, opacity: 0.9 }}>
                 joined year (range)
               </Typography>
@@ -572,7 +848,6 @@ export default function CompanyBarChart(props: { companies: company_row[] }) {
                 </Grid>
               </Grid>
 
-              {/* annual revenue range: slider + inputs */}
               <Typography variant="subtitle2" sx={{ fontWeight: 800, opacity: 0.9 }}>
                 annual revenue (range)
               </Typography>
@@ -664,7 +939,6 @@ export default function CompanyBarChart(props: { companies: company_row[] }) {
                 </Grid>
               </Grid>
 
-              {/* employees range: slider + inputs */}
               <Typography variant="subtitle2" sx={{ fontWeight: 800, opacity: 0.9 }}>
                 employees (range)
               </Typography>
