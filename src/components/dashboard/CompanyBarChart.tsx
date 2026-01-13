@@ -250,10 +250,10 @@ function BubbleCirclePacking(props: {
       .join("circle")
       .attr("display", (d) => (d.depth === 0 ? "none" : "block")) // ✅ root 不画
       .attr("fill", (d) =>
-        d.children ? "rgba(0,229,255,0.05)" : "rgba(0,229,255,0.28)"
+        d.children ? "rgba(53, 204, 204, 0.05)" : "rgba(255, 255, 255, 0.5)"
       )
       .attr("stroke", (d) =>
-        d.children ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.22)"
+        d.children ? "rgba(255,255,255,0.22)" : "rgba(255, 255, 255, 0.22)"
       )
       .attr("stroke-width", (d) => (d.children ? 1 : 1))
       .on("mousemove", (event, d) => {

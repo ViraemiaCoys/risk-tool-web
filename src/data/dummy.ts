@@ -12,12 +12,7 @@ export type user_row = {
   status: user_status;
 };
 
-/**
- * 不在 dummy.ts 重复维护用户数组，
- * 直接复用你现成的 user.mock.ts
- */
 import { users_list_rows } from "@/data/user.mock";
-
 export const users: user_row[] = users_list_rows;
 
 /* =======================
@@ -25,26 +20,23 @@ export const users: user_row[] = users_list_rows;
    ======================= */
 
 export type company_row = {
-  company_code: string;
+  company_code: string; // c-0001
   company_name: string;
-  level: number; // 1..3
+  level: number; // 1..3 (1=top group, 3=operating sub)
   country: string;
   city: string;
   founded_year: number;
-  joined_year: number; // 加入供应链网络年份
-  annual_revenue: number; // USD
+  joined_year: number;
+  annual_revenue: number;
   employees: number;
 };
 
 export type company_relationship_row = {
   company_code: string;
-  parent_company: string; // "root" or another company_code
+  parent_company: string; // parent company_code
 };
 
-type seed_row = {
-  country: string;
-  city: string;
-};
+type seed_row = { country: string; city: string };
 
 const seed_geo: seed_row[] = [
   { country: "USA", city: "Los Angeles" },
@@ -126,214 +118,260 @@ function pseudo_rand(seed: number) {
 function make_joined_year(idx: number) {
   const min_year = 2010;
   const max_year = 2024;
-
   const r = pseudo_rand(idx + 777);
   const skew = 1 - r * r;
   const year = Math.round(min_year + skew * (max_year - min_year));
   return clamp_int(year, min_year, max_year);
 }
 
-function make_company(idx: number): company_row {
-  const geo = seed_geo[idx % seed_geo.length];
-  const name = seed_names[idx % seed_names.length];
-
-  const level = 1 + (idx % 3); // 1..3
-  const founded_year = clamp_int(1900 + pseudo_rand(idx + 13) * 125, 1900, 2024);
-  const joined_year = make_joined_year(idx);
-
-  // revenue: 20m..2.2b
-  const revenue = clamp_int(
-    20_000_000 + pseudo_rand(idx + 71) * 2_180_000_000,
-    5_000_000,
-    3_000_000_000
-  );
-
-  // employees: 80..15000
-  const employees = clamp_int(80 + pseudo_rand(idx + 101) * 14_920, 30, 30_000);
-
-  const code = `c-${String(idx + 1).padStart(4, "0")}`;
-
-  return {
-    company_code: code,
-    company_name: name,
-    level,
-    country: geo.country,
-    city: geo.city,
-    founded_year,
-    joined_year,
-    annual_revenue: revenue,
-    employees,
-  };
+function code_of(idx0: number) {
+  return `c-${String(idx0 + 1).padStart(4, "0")}`;
 }
 
-export const companies: company_row[] = Array.from({ length: 40 }, (_, i) => make_company(i));
+/**
+ * 生成策略：
+ * - 40家公司：3个集团(level1) + 若干(level2) + 剩下全部(level3)
+ * - 然后生成 relationship：level1 -> level2 -> level3
+ * - level 与 parent/child 的组织结构一致（避免“level1下面全是level1”）
+ */
+function make_companies(total: number) {
+  const list: company_row[] = [];
 
-/* =======================
-   relationships (simulated)
-   ======================= */
+  // 你可以调这些参数来控制结构
+  const top_groups = 3; // level1
+  const level2_per_group_min = 3;
+  const level2_per_group_max = 5;
 
-export const company_relationships: company_relationship_row[] = (() => {
-  const ROOT = "root";
+  // 先占位：level1
+  for (let i = 0; i < top_groups; i++) {
+    const idx0 = list.length;
+    const geo = seed_geo[(idx0 + 3) % seed_geo.length];
+    const name = seed_names[(idx0 + 11) % seed_names.length];
 
-  // 让前三个公司当做“集团母公司”
-  const parent_a = companies[0]?.company_code ?? "c-0001";
-  const parent_b = companies[1]?.company_code ?? "c-0002";
-  const parent_c = companies[2]?.company_code ?? "c-0003";
-
-  const rels: company_relationship_row[] = [];
-
-  // 先把三大母公司挂在 root
-  rels.push({ company_code: parent_a, parent_company: ROOT });
-  rels.push({ company_code: parent_b, parent_company: ROOT });
-  rels.push({ company_code: parent_c, parent_company: ROOT });
-
-  // 分配其余公司到三棵树
-  for (let i = 3; i < companies.length; i++) {
-    const code = companies[i].company_code;
-
-    // 先决定一级 parent
-    let parent = parent_a;
-    if (i % 3 === 1) parent = parent_b;
-    if (i % 3 === 2) parent = parent_c;
-
-    rels.push({ company_code: code, parent_company: parent });
+    list.push({
+      company_code: code_of(idx0),
+      company_name: `${name} Holdings`,
+      level: 1,
+      country: geo.country,
+      city: geo.city,
+      founded_year: clamp_int(1950 + pseudo_rand(idx0 + 13) * 60, 1900, 2024),
+      joined_year: make_joined_year(idx0),
+      annual_revenue: clamp_int(800_000_000 + pseudo_rand(idx0 + 71) * 2_200_000_000, 300_000_000, 3_000_000_000),
+      employees: clamp_int(4000 + pseudo_rand(idx0 + 101) * 18000, 1000, 30000),
+    });
   }
 
-  // 再制造一层：给部分节点挂“二级子公司”
-  // 让结构更像真实：不是所有都直接挂母公司
-  const candidate_mid_parents = companies
-    .slice(6, 18) // 挑一段当中间层
-    .map((c) => c.company_code);
+  // level2：每个集团若干个
+  const level2_targets: number[] = [];
+  for (let g = 0; g < top_groups; g++) {
+    const r = pseudo_rand(900 + g);
+    const k = clamp_int(level2_per_group_min + r * (level2_per_group_max - level2_per_group_min), level2_per_group_min, level2_per_group_max);
+    level2_targets.push(k);
+  }
 
-  for (let i = 18; i < companies.length; i++) {
-    // 让一部分公司改挂到中间层 parent
-    const r = pseudo_rand(i + 2025);
-    if (r < 0.35) {
-      const code = companies[i].company_code;
-      const mid_parent = candidate_mid_parents[i % candidate_mid_parents.length];
-      // 替换掉原先关系
-      const idx = rels.findIndex((x) => x.company_code === code);
-      if (idx >= 0) rels[idx] = { company_code: code, parent_company: mid_parent };
+  const level2_total = level2_targets.reduce((a, b) => a + b, 0);
+
+  for (let i = 0; i < level2_total; i++) {
+    const idx0 = list.length;
+    const geo = seed_geo[(idx0 + 5) % seed_geo.length];
+    const name = seed_names[(idx0 + 17) % seed_names.length];
+
+    list.push({
+      company_code: code_of(idx0),
+      company_name: `${name} Group`,
+      level: 2,
+      country: geo.country,
+      city: geo.city,
+      founded_year: clamp_int(1970 + pseudo_rand(idx0 + 13) * 45, 1900, 2024),
+      joined_year: make_joined_year(idx0),
+      annual_revenue: clamp_int(150_000_000 + pseudo_rand(idx0 + 71) * 900_000_000, 50_000_000, 1_500_000_000),
+      employees: clamp_int(800 + pseudo_rand(idx0 + 101) * 9000, 100, 15000),
+    });
+  }
+
+  // 剩余全部 level3
+  while (list.length < total) {
+    const idx0 = list.length;
+    const geo = seed_geo[idx0 % seed_geo.length];
+    const name = seed_names[idx0 % seed_names.length];
+
+    list.push({
+      company_code: code_of(idx0),
+      company_name: name,
+      level: 3,
+      country: geo.country,
+      city: geo.city,
+      founded_year: clamp_int(1990 + pseudo_rand(idx0 + 13) * 34, 1900, 2024),
+      joined_year: make_joined_year(idx0),
+      annual_revenue: clamp_int(20_000_000 + pseudo_rand(idx0 + 71) * 320_000_000, 5_000_000, 600_000_000),
+      employees: clamp_int(50 + pseudo_rand(idx0 + 101) * 2950, 10, 6000),
+    });
+  }
+
+  return { list, top_groups, level2_targets };
+}
+
+function make_relationships(companies_list: company_row[], top_groups: number, level2_targets: number[]) {
+  const relationships: company_relationship_row[] = [];
+
+  const level1 = companies_list.filter((c) => c.level === 1);
+  const level2 = companies_list.filter((c) => c.level === 2);
+  const level3 = companies_list.filter((c) => c.level === 3);
+
+  // 把 level2 按 group 分配到各 level1（按目标数量切片）
+  let cursor = 0;
+  const level2_by_group: company_row[][] = [];
+
+  for (let g = 0; g < top_groups; g++) {
+    const k = level2_targets[g];
+    const slice = level2.slice(cursor, cursor + k);
+    cursor += k;
+    level2_by_group.push(slice);
+
+    for (const child of slice) {
+      relationships.push({
+        company_code: child.company_code,
+        parent_company: level1[g].company_code,
+      });
     }
   }
 
-  return rels;
+  // 再把 level3 分配给某个 level2（每个 level2 2~4 个，剩余均匀铺开）
+  // 用稳定 pseudo_rand 分配，确保刷新不变
+  for (let i = 0; i < level3.length; i++) {
+    const child = level3[i];
+
+    // 随机选择一个 group
+    const g = clamp_int(pseudo_rand(2000 + i) * top_groups, 0, top_groups - 1);
+    const candidates = level2_by_group[g];
+
+    // 如果该 group 没有 level2（理论上不会），就挂到该 level1
+    if (!candidates || candidates.length === 0) {
+      relationships.push({ company_code: child.company_code, parent_company: level1[g].company_code });
+      continue;
+    }
+
+    const pick = clamp_int(pseudo_rand(3000 + i) * candidates.length, 0, candidates.length - 1);
+    const parent = candidates[pick];
+
+    relationships.push({
+      company_code: child.company_code,
+      parent_company: parent.company_code,
+    });
+  }
+
+  return relationships;
+}
+
+export const companies: company_row[] = (() => {
+  const total = 40;
+  const { list } = make_companies(total);
+  return list;
+})();
+
+export const company_relationships: company_relationship_row[] = (() => {
+  const total = 40;
+  const { list, top_groups, level2_targets } = make_companies(total);
+  // 注意：companies 与 relationships 必须基于同一份 list
+  // 所以上面 companies 用了 make_companies(total) 生成一次，这里也要同源
+  // 为了避免两次生成导致不一致，这里直接用 export 的 companies
+  const level1_count = companies.filter((c) => c.level === 1).length;
+
+  // 重新计算 level2_targets（与 companies 一致）
+  // 由于 companies 已经生成好，按 level2 在 companies 中的顺序切片即可：
+  const level2_total = companies.filter((c) => c.level === 2).length;
+
+  // 用一个稳定拆分：尽量均匀分配给 level1_count 个集团
+  const base = Math.floor(level2_total / level1_count);
+  const rem = level2_total % level1_count;
+  const targets = Array.from({ length: level1_count }, (_, i) => base + (i < rem ? 1 : 0));
+
+  return make_relationships(companies, level1_count, targets);
 })();
 
 /* =======================
-   hierarchy builder for d3
+   hierarchy builder
    ======================= */
 
+type bubble_node = {
+  name: string;
+  company_code?: string;
+  country?: string;
+  city?: string;
+  level?: number;
+  annual_revenue?: number;
+  employees?: number;
+  joined_year?: number;
+  children?: bubble_node[];
+};
+
 export function build_company_hierarchy(
-  input_companies: company_row[],
+  companies_list: company_row[],
   relationships: company_relationship_row[]
-) {
-  const ROOT = "root";
-
+): bubble_node {
   const by_code = new Map<string, company_row>();
-  for (const c of input_companies) by_code.set(c.company_code, c);
+  for (const c of companies_list) by_code.set(c.company_code, c);
 
-  type node = {
-    name: string;
-    company_code?: string;
-    level?: number;
-    country?: string;
-    city?: string;
-    founded_year?: number;
-    joined_year?: number;
-    annual_revenue?: number;
-    employees?: number;
-    children: node[];
-  };
+  // parent -> children
+  const children_by_parent = new Map<string, string[]>();
+  const parent_by_child = new Map<string, string>();
 
-  const node_by_code = new Map<string, node>();
-
-  function to_node(c: company_row): node {
-    return {
-      name: c.company_name,
-      company_code: c.company_code,
-      level: c.level,
-      country: c.country,
-      city: c.city,
-      founded_year: c.founded_year,
-      joined_year: c.joined_year,
-      annual_revenue: c.annual_revenue,
-      employees: c.employees,
-      children: [],
-    };
-  }
-
-  for (const c of input_companies) {
-    node_by_code.set(c.company_code, to_node(c));
-  }
-
-  const root: node = { name: "root", children: [] };
-
-  // parent -> children codes
-  const children_of = new Map<string, string[]>();
   for (const rel of relationships) {
-    if (!by_code.has(rel.company_code)) continue; // filtered out
+    if (!by_code.has(rel.company_code)) continue;
+    if (!by_code.has(rel.parent_company)) continue;
 
-    const parent = rel.parent_company || ROOT;
-    const list = children_of.get(parent) ?? [];
-    list.push(rel.company_code);
-    children_of.set(parent, list);
+    parent_by_child.set(rel.company_code, rel.parent_company);
+
+    const arr = children_by_parent.get(rel.parent_company) ?? [];
+    arr.push(rel.company_code);
+    children_by_parent.set(rel.parent_company, arr);
   }
+
+  // 找根：没有 parent 的公司就是 root candidates（通常是 level1）
+  const roots = companies_list
+    .filter((c) => !parent_by_child.has(c.company_code))
+    .map((c) => c.company_code);
 
   const visited = new Set<string>();
 
-  function attach(parent_code: string, parent_node: node) {
-    const kids = children_of.get(parent_code) ?? [];
-    for (const kid_code of kids) {
-      if (visited.has(kid_code)) continue;
-      visited.add(kid_code);
+  const make_node = (code: string): bubble_node => {
+    const c = by_code.get(code)!;
+    visited.add(code);
 
-      const kid_node = node_by_code.get(kid_code);
-      if (!kid_node) continue;
+    const children_codes = children_by_parent.get(code) ?? [];
+    const children = children_codes.map(make_node);
 
-      parent_node.children.push(kid_node);
-      attach(kid_code, kid_node);
-    }
-  }
+    return {
+      name: c.company_name,
+      company_code: c.company_code,
+      country: c.country,
+      city: c.city,
+      level: c.level,
+      annual_revenue: c.annual_revenue,
+      employees: c.employees,
+      joined_year: c.joined_year,
+      children: children.length ? children : undefined,
+    };
+  };
 
-  // 先挂 root 下的节点
-  attach(ROOT, root);
+  const root_children = roots.map(make_node);
 
-  // 兜底：孤儿节点（父节点不在过滤后的 companies 中）挂回 root
-  for (const c of input_companies) {
-    if (!visited.has(c.company_code)) {
-      const n = node_by_code.get(c.company_code);
-      if (n) root.children.push(n);
-    }
-  }
+  // 兜底：如果存在孤儿（例如过滤后 parent 不在 companies_list），挂到 root
+  const orphans = companies_list
+    .filter((c) => !visited.has(c.company_code))
+    .map((c) => ({
+      name: c.company_name,
+      company_code: c.company_code,
+      country: c.country,
+      city: c.city,
+      level: c.level,
+      annual_revenue: c.annual_revenue,
+      employees: c.employees,
+      joined_year: c.joined_year,
+    }));
 
-  return root;
+  return {
+    name: "all companies",
+    children: [...root_children, ...orphans],
+  };
 }
-
-/* =======================
-   optional helpers for charts
-   ======================= */
-
-// donut: level counts
-export const company_level_counts = [1, 2, 3].map((lvl) => ({
-  level: lvl,
-  count: companies.filter((c) => c.level === lvl).length,
-}));
-
-// line: joined_year cumulative
-export const cumulative_companies_by_year = (() => {
-  const years = Array.from(new Set(companies.map((c) => c.joined_year))).sort((a, b) => a - b);
-
-  const add_by_year = years.map((y) => ({
-    year: y,
-    added: companies.filter((c) => c.joined_year === y).length,
-  }));
-
-  let cum = 0;
-  const cumulative = add_by_year.map((r) => {
-    cum += r.added;
-    return { year: r.year, cumulative: cum, added: r.added };
-  });
-
-  return cumulative;
-})();
