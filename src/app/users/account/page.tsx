@@ -3,14 +3,19 @@
 import * as React from "react";
 import {
   Avatar,
+  Alert,
   Box,
   Button,
   Card,
   CardContent,
   Divider,
+  FormControl,
   FormControlLabel,
   Grid,
   IconButton,
+  MenuItem,
+  Select,
+  Snackbar,
   Stack,
   Switch,
   Tab,
@@ -26,35 +31,10 @@ import LinkIcon from "@mui/icons-material/Link";
 import SecurityIcon from "@mui/icons-material/Security";
 import SettingsIcon from "@mui/icons-material/Settings";
 
+import { use_auth } from "@/auth/auth.context";
+import type { me_user } from "@/auth/auth.types";
+
 type account_tab = "general" | "billing" | "notifications" | "social" | "security";
-
-type me_account = {
-  name: string;
-  email: string;
-  phone: string;
-  address: string;
-  country: string;
-  state_region: string;
-  city: string;
-  zip_code: string;
-  about: string;
-  public_profile: boolean;
-  avatar_url: string;
-};
-
-const me_mock: me_account = {
-  name: "Jaydon Frankie",
-  email: "demo@minimals.cc",
-  phone: "(416) 555-0198",
-  address: "90210 Broadway Blvd",
-  country: "Canada",
-  state_region: "California",
-  city: "San Francisco",
-  zip_code: "94116",
-  about: "Praesent turpis. Phasellus viverra nulla ut metus varius laoreet. Phasellus tempus.",
-  public_profile: true,
-  avatar_url: "https://i.pravatar.cc/200?img=12",
-};
 
 function tab_label(tab: account_tab) {
   if (tab === "general") return "General";
@@ -64,20 +44,81 @@ function tab_label(tab: account_tab) {
   return "Security";
 }
 
-export default function Page() {
-  const [tab, set_tab] = React.useState<account_tab>("general");
-  const [value, set_value] = React.useState<me_account>(me_mock);
+function country_label(code: me_user["country_code"]) {
+  if (code === "ca") return "🇨🇦 Canada";
+  if (code === "us") return "🇺🇸 United States";
+  if (code === "uk") return "🇬🇧 United Kingdom";
+  return "🇨🇳 China";
+}
 
-  const update = <K extends keyof me_account>(key: K, next: me_account[K]) => {
+export default function Page() {
+  const { me, patch_me } = use_auth();
+
+  const [tab, set_tab] = React.useState<account_tab>("general");
+
+  // 本地编辑缓冲
+  const [value, set_value] = React.useState<me_user>(me);
+  const [saving, set_saving] = React.useState(false);
+
+  // toast/snackbar
+  const [toast, set_toast] = React.useState<{
+    open: boolean;
+    severity: "success" | "error" | "warning";
+    message: string;
+  }>({ open: false, severity: "success", message: "" });
+
+  // 表单错误（目前只做 phone）
+  const [errors, set_errors] = React.useState<{ phone?: string }>({});
+
+  React.useEffect(() => {
+    set_value(me);
+  }, [me]);
+
+  const update = <K extends keyof me_user>(key: K, next: me_user[K]) => {
     set_value((prev) => ({ ...prev, [key]: next }));
   };
 
-  const on_save = () => {
-    console.log("save account", value);
+  const validate = () => {
+    const next_errors: { phone?: string } = {};
+    if (!value.phone.trim()) next_errors.phone = "Phone number is required.";
+    set_errors(next_errors);
+    return Object.keys(next_errors).length === 0;
+  };
+
+  const on_save = async () => {
+    if (!validate()) {
+      set_toast({ open: true, severity: "warning", message: "Please fix the highlighted fields." });
+      return;
+    }
+
+    set_saving(true);
+    try {
+      await patch_me({
+        name: value.name,
+        phone: value.phone,
+        address: value.address,
+        country_code: value.country_code,
+        state_region: value.state_region,
+        city: value.city,
+        zip_code: value.zip_code,
+        about: value.about,
+        public_profile: value.public_profile,
+        avatar_url: value.avatar_url,
+      });
+
+      set_toast({ open: true, severity: "success", message: "Saved successfully." });
+      console.log("save account", value);
+    } catch (e) {
+      console.error(e);
+      set_toast({ open: true, severity: "error", message: "Save failed. Check console for details." });
+    } finally {
+      set_saving(false);
+    }
   };
 
   const on_delete = () => {
     console.log("delete account");
+    set_toast({ open: true, severity: "warning", message: "Delete user will be implemented later (admin only)." });
   };
 
   return (
@@ -121,12 +162,7 @@ export default function Page() {
             iconPosition="start"
             label={tab_label("notifications")}
           />
-          <Tab
-            value="social"
-            icon={<LinkIcon fontSize="small" />}
-            iconPosition="start"
-            label={tab_label("social")}
-          />
+          <Tab value="social" icon={<LinkIcon fontSize="small" />} iconPosition="start" label={tab_label("social")} />
           <Tab
             value="security"
             icon={<SecurityIcon fontSize="small" />}
@@ -144,16 +180,11 @@ export default function Page() {
             display: "flex",
             gap: 3,
             alignItems: "flex-start",
-            flexDirection: { xs: "column", sm: "row" }, // xs 上下，sm+ 左右
+            flexDirection: { xs: "column", sm: "row" },
           }}
         >
           {/* left card */}
-          <Box
-            sx={{
-              width: { xs: "100%", sm: 300 }, // 左侧固定宽度，更像例子
-              flex: "0 0 auto",
-            }}
-          >
+          <Box sx={{ width: { xs: "100%", sm: 300 }, flex: "0 0 auto" }}>
             <Card sx={{ borderRadius: 3 }}>
               <CardContent sx={{ py: 3 }}>
                 <Stack alignItems="center" spacing={2}>
@@ -168,7 +199,9 @@ export default function Page() {
                         bgcolor: "background.paper",
                         boxShadow: "0 10px 25px rgba(0,0,0,0.18)",
                       }}
-                      onClick={() => console.log("upload avatar")}
+                      onClick={() =>
+                        set_toast({ open: true, severity: "warning", message: "Avatar upload will be implemented later." })
+                      }
                       aria-label="upload avatar"
                     >
                       <PhotoCameraIcon fontSize="small" />
@@ -211,12 +244,7 @@ export default function Page() {
               <CardContent sx={{ p: { xs: 2, md: 3 } }}>
                 <Grid container spacing={2.5}>
                   <Grid item xs={12} md={6}>
-                    <TextField
-                      label="Name"
-                      fullWidth
-                      value={value.name}
-                      onChange={(e) => update("name", e.target.value)}
-                    />
+                    <TextField label="Name" fullWidth value={value.name} onChange={(e) => update("name", e.target.value)} />
                   </Grid>
 
                   <Grid item xs={12} md={6}>
@@ -224,7 +252,8 @@ export default function Page() {
                       label="Email address"
                       fullWidth
                       value={value.email}
-                      onChange={(e) => update("email", e.target.value)}
+                      helperText="Email is used as your login account and cannot be edited."
+                      InputProps={{ readOnly: true }}
                     />
                   </Grid>
 
@@ -234,6 +263,8 @@ export default function Page() {
                       fullWidth
                       value={value.phone}
                       onChange={(e) => update("phone", e.target.value)}
+                      error={Boolean(errors.phone)}
+                      helperText={errors.phone || " "}
                     />
                   </Grid>
 
@@ -247,12 +278,20 @@ export default function Page() {
                   </Grid>
 
                   <Grid item xs={12} md={6}>
-                    <TextField
-                      label="Country"
-                      fullWidth
-                      value={value.country}
-                      onChange={(e) => update("country", e.target.value)}
-                    />
+                    <FormControl fullWidth>
+                      <Typography variant="caption" sx={{ opacity: 0.7, mb: 0.5 }}>
+                        Country
+                      </Typography>
+                      <Select
+                        value={value.country_code}
+                        onChange={(e) => update("country_code", e.target.value as me_user["country_code"])}
+                      >
+                        <MenuItem value="ca">{country_label("ca")}</MenuItem>
+                        <MenuItem value="us">{country_label("us")}</MenuItem>
+                        <MenuItem value="uk">{country_label("uk")}</MenuItem>
+                        <MenuItem value="cn">{country_label("cn")}</MenuItem>
+                      </Select>
+                    </FormControl>
                   </Grid>
 
                   <Grid item xs={12} md={6}>
@@ -265,12 +304,7 @@ export default function Page() {
                   </Grid>
 
                   <Grid item xs={12} md={6}>
-                    <TextField
-                      label="City"
-                      fullWidth
-                      value={value.city}
-                      onChange={(e) => update("city", e.target.value)}
-                    />
+                    <TextField label="City" fullWidth value={value.city} onChange={(e) => update("city", e.target.value)} />
                   </Grid>
 
                   <Grid item xs={12} md={6}>
@@ -282,15 +316,26 @@ export default function Page() {
                     />
                   </Grid>
 
+                  <Grid item xs={12}>
+                    <TextField
+                      label="About"
+                      fullWidth
+                      multiline
+                      minRows={4}
+                      value={value.about}
+                      onChange={(e) => update("about", e.target.value)}
+                    />
+                  </Grid>
 
                   <Grid item xs={12}>
                     <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
                       <Button
                         variant="contained"
+                        disabled={saving}
                         sx={{ borderRadius: 2, textTransform: "none", fontWeight: 800 }}
                         onClick={on_save}
                       >
-                        Save changes
+                        {saving ? "Saving..." : "Save changes"}
                       </Button>
                     </Box>
                   </Grid>
@@ -302,9 +347,7 @@ export default function Page() {
       ) : (
         <Card sx={{ borderRadius: 3 }}>
           <CardContent>
-            <Typography sx={{ fontWeight: 900, fontSize: 18, mb: 1 }}>
-              {tab_label(tab)}
-            </Typography>
+            <Typography sx={{ fontWeight: 900, fontSize: 18, mb: 1 }}>{tab_label(tab)}</Typography>
             <Divider sx={{ mb: 2 }} />
             <Typography variant="body2" sx={{ opacity: 0.8 }}>
               This tab is a placeholder. You can wire it to real API data later.
@@ -312,6 +355,23 @@ export default function Page() {
           </CardContent>
         </Card>
       )}
+
+      {/* ✅ toast */}
+      <Snackbar
+        open={toast.open}
+        autoHideDuration={1800}
+        onClose={() => set_toast((t) => ({ ...t, open: false }))}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert
+          onClose={() => set_toast((t) => ({ ...t, open: false }))}
+          severity={toast.severity}
+          variant="filled"
+          sx={{ fontWeight: 800 }}
+        >
+          {toast.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }

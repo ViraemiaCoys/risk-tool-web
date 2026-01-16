@@ -1,6 +1,11 @@
 "use client";
 
 import * as React from "react";
+import type { user_role } from "@/auth/auth.types";
+import { use_auth } from "@/auth/auth.context";
+import { can_change_permission_role } from "@/auth/rbac";
+import type { user_role } from "@/auth/auth.types";
+
 import {
   Avatar,
   Box,
@@ -34,8 +39,11 @@ export type user_form_value = {
   city: string;
   address: string;
   zip_code: string;
+
   company: string;
-  role: string;
+  title_role: string; // 原 role 改名为 title_role（头衔）
+  permission_role: user_role; // 新增：权限 role
+
   email_verified: boolean;
   status?: user_status;
 };
@@ -50,13 +58,18 @@ const country_options = [
 export default function UserForm(props: {
   mode: user_form_mode;
   initial_value?: Partial<user_form_value>;
+
+  // 权限控制：由 page 传入（避免 form 内部用 use_auth）
+  show_permission_role?: boolean;
+  allow_edit_permission_role?: boolean;
+
   on_submit: (value: user_form_value) => void;
   on_cancel?: () => void;
   on_delete?: () => void;
 }) {
   const { mode } = props;
 
-  const [value, set_value] = React.useState<user_form_value>({
+  const [value, set_value] = React.useState<user_form_value>(() => ({
     name: "",
     email: "",
     phone: "",
@@ -66,20 +79,23 @@ export default function UserForm(props: {
     address: "",
     zip_code: "",
     company: "",
-    role: "",
+    title_role: "",
+    permission_role: "user",
     email_verified: true,
     status: "active",
     ...props.initial_value,
-  });
+  }));
+
+  // 如果 initial_value 后续变了（比如你从列表切换不同 user），同步一次
+  React.useEffect(() => {
+    if (!props.initial_value) return;
+    set_value((prev) => ({ ...prev, ...props.initial_value }));
+  }, [props.initial_value]);
 
   const update = <K extends keyof user_form_value>(key: K, next_value: user_form_value[K]) => {
     set_value((prev) => ({ ...prev, [key]: next_value }));
   };
 
-  const selected_country =
-    country_options.find((c) => c.value === value.country) ?? country_options[0];
-
-  // 统一暗黑输入框样式（注意：类名必须是 Mui 大写）
   const field_sx = {
     "& .MuiOutlinedInput-root": {
       borderRadius: 2.5,
@@ -90,7 +106,6 @@ export default function UserForm(props: {
     },
     "& .MuiInputLabel-root": { color: "rgba(255,255,255,0.65)" },
     "& .MuiInputBase-input": { color: "rgba(255,255,255,0.92)" },
-    "& .MuiOutlinedInput-notchedOutline": { transition: "border-color 120ms ease" },
   } as const;
 
   return (
@@ -104,7 +119,6 @@ export default function UserForm(props: {
       </Typography>
 
       <Stack direction={{ xs: "column", md: "row" }} spacing={3} alignItems="stretch" sx={{ minWidth: 0 }}>
-        {/* Left card */}
         <Box sx={{ width: { xs: "100%", md: 280 }, flexShrink: 0 }}>
           <Card sx={{ borderRadius: 3, height: "100%", background: "rgba(255,255,255,0.03)" }}>
             <CardContent sx={{ p: 3 }}>
@@ -167,7 +181,6 @@ export default function UserForm(props: {
           </Card>
         </Box>
 
-        {/* Right card */}
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Card sx={{ borderRadius: 3, height: "100%", background: "rgba(255,255,255,0.03)" }}>
             <CardContent sx={{ p: 3 }}>
@@ -175,29 +188,42 @@ export default function UserForm(props: {
                 Details
               </Typography>
 
-              {/* 桌面端固定两列：md=6 */}
               <Grid container spacing={2}>
                 <Grid item xs={12} md={6}>
-                  <TextField
-                    label="Full name"
-                    fullWidth
-                    value={value.name}
-                    onChange={(e) => update("name", e.target.value)}
-                    sx={field_sx}
-                  />
+                  <TextField label="Full name" fullWidth value={value.name} onChange={(e) => update("name", e.target.value)} sx={field_sx} />
                 </Grid>
 
                 <Grid item xs={12} md={6}>
-                  <TextField
-                    label="Email address"
-                    fullWidth
-                    value={value.email}
-                    onChange={(e) => update("email", e.target.value)}
-                    sx={field_sx}
-                  />
+                  <TextField label="Email address" fullWidth value={value.email} onChange={(e) => update("email", e.target.value)} sx={field_sx} />
                 </Grid>
 
-                {/* Country + Phone 合并：Country 放在 phone 的 startAdornment */}
+                {/* Permission role：仅当 show_permission_role 为 true 才展示 */}
+                {props.show_permission_role ? (
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="caption" sx={{ display: "block", mb: 0.5, opacity: 0.75 }}>
+                      Permission role
+                    </Typography>
+                    <Select
+                      fullWidth
+                      value={value.permission_role}
+                      onChange={(e) => update("permission_role", e.target.value as user_role)}
+                      disabled={!props.allow_edit_permission_role}
+                      sx={{
+                        ...field_sx,
+                        "& .MuiOutlinedInput-root": {
+                          ...(field_sx as any)["& .MuiOutlinedInput-root"],
+                        },
+                        color: "rgba(255,255,255,0.92)",
+                      }}
+                    >
+                      <MenuItem value="admin">admin</MenuItem>
+                      <MenuItem value="manager">manager</MenuItem>
+                      <MenuItem value="user">user</MenuItem>
+                    </Select>
+                  </Grid>
+                ) : null}
+
+                {/* phone */}
                 <Grid item xs={12} md={6}>
                   <TextField
                     label="Phone number"
@@ -216,17 +242,11 @@ export default function UserForm(props: {
                               sx={{
                                 minWidth: 120,
                                 color: "rgba(255,255,255,0.92)",
-                                "& .MuiSelect-select": {
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: 1,
-                                  py: 0,
-                                },
+                                "& .MuiSelect-select": { display: "flex", alignItems: "center", gap: 1, py: 0 },
                                 "& .MuiSvgIcon-root": { color: "rgba(255,255,255,0.55)" },
                               }}
                               renderValue={(selected) => {
-                                const c =
-                                  country_options.find((x) => x.value === selected) ?? country_options[0];
+                                const c = country_options.find((x) => x.value === selected) ?? country_options[0];
                                 return (
                                   <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                                     <span>{c.flag}</span>
@@ -235,14 +255,6 @@ export default function UserForm(props: {
                                     </Typography>
                                   </Box>
                                 );
-                              }}
-                              MenuProps={{
-                                PaperProps: {
-                                  sx: {
-                                    bgcolor: "rgba(20,20,20,0.98)",
-                                    border: "1px solid rgba(255,255,255,0.10)",
-                                  },
-                                },
                               }}
                             >
                               {country_options.map((c) => (
@@ -264,66 +276,51 @@ export default function UserForm(props: {
                   />
                 </Grid>
 
-                {/* 这里放 City，保证同一行还是 2 列 */}
                 <Grid item xs={12} md={6}>
-                  <TextField
-                    label="City"
-                    fullWidth
-                    value={value.city}
-                    onChange={(e) => update("city", e.target.value)}
-                    sx={field_sx}
-                  />
+                  <TextField label="City" fullWidth value={value.city} onChange={(e) => update("city", e.target.value)} sx={field_sx} />
                 </Grid>
 
                 <Grid item xs={12} md={6}>
-                  <TextField
-                    label="State/region"
-                    fullWidth
-                    value={value.state_region}
-                    onChange={(e) => update("state_region", e.target.value)}
-                    sx={field_sx}
-                  />
+                  <TextField label="State/region" fullWidth value={value.state_region} onChange={(e) => update("state_region", e.target.value)} sx={field_sx} />
                 </Grid>
 
                 <Grid item xs={12} md={6}>
-                  <TextField
-                    label="Zip/code"
-                    fullWidth
-                    value={value.zip_code}
-                    onChange={(e) => update("zip_code", e.target.value)}
-                    sx={field_sx}
-                  />
+                  <TextField label="Zip/code" fullWidth value={value.zip_code} onChange={(e) => update("zip_code", e.target.value)} sx={field_sx} />
                 </Grid>
 
                 <Grid item xs={12} md={6}>
-                  <TextField
-                    label="Address"
-                    fullWidth
-                    value={value.address}
-                    onChange={(e) => update("address", e.target.value)}
-                    sx={field_sx}
-                  />
+                  <TextField label="Address" fullWidth value={value.address} onChange={(e) => update("address", e.target.value)} sx={field_sx} />
                 </Grid>
 
                 <Grid item xs={12} md={6}>
-                  <TextField
-                    label="Company"
-                    fullWidth
-                    value={value.company}
-                    onChange={(e) => update("company", e.target.value)}
-                    sx={field_sx}
-                  />
+                  <TextField label="Company" fullWidth value={value.company} onChange={(e) => update("company", e.target.value)} sx={field_sx} />
                 </Grid>
 
-                {/* Role 不再超长：保持 md=6 */}
                 <Grid item xs={12} md={6}>
-                  <TextField
-                    label="Role"
+                  <TextField label="Title / Role" fullWidth value={value.title_role} onChange={(e) => update("title_role", e.target.value)} sx={field_sx} />
+                </Grid>
+
+                <Grid item xs={12} md={6}>
+                  <Typography variant="caption" sx={{ display: "block", mb: 0.5, opacity: 0.75 }}>
+                    Status
+                  </Typography>
+                  <Select
                     fullWidth
-                    value={value.role}
-                    onChange={(e) => update("role", e.target.value)}
-                    sx={field_sx}
-                  />
+                    value={value.status ?? "active"}
+                    onChange={(e) => update("status", e.target.value as user_status)}
+                    sx={{
+                      ...field_sx,
+                      "& .MuiOutlinedInput-root": {
+                        ...(field_sx as any)["& .MuiOutlinedInput-root"],
+                      },
+                      color: "rgba(255,255,255,0.92)",
+                    }}
+                  >
+                    <MenuItem value="active">active</MenuItem>
+                    <MenuItem value="pending">pending</MenuItem>
+                    <MenuItem value="banned">banned</MenuItem>
+                    <MenuItem value="rejected">rejected</MenuItem>
+                  </Select>
                 </Grid>
               </Grid>
 

@@ -52,14 +52,16 @@ function to_title_case(s: string) {
     .join(" ");
 }
 
-function to_role_short(role: string) {
-  const r = role.trim().toLowerCase();
+function to_role_short(role?: string) {
+  const raw = String(role ?? "");
+  const r = raw.trim().toLowerCase();
+  if (!r) return "unknown";
   if (r.includes("cto")) return "cto";
   if (r.includes("ceo")) return "ceo";
   if (r.includes("hr")) return "hr";
   if (r.includes("it")) return "it";
   if (r.includes("designer")) return "designer";
-  return role.split(" ")[0] || role;
+  return raw.split(" ")[0] || raw;
 }
 
 /** ===== unified dark glass card style ===== */

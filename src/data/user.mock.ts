@@ -1,17 +1,16 @@
-/* =======================
-   shared user mock (list + cards)
-   ======================= */
-
 export type user_status = "active" | "pending" | "banned";
+export type permission_role = "admin" | "manager" | "user";
 
 export type user_mock = {
   user_id: string;
   name: string;
   email: string;
-  role: string;
+
+  title_role: string; // 业务头衔
+  permission_role: permission_role; // 权限角色
+
   status: user_status;
 
-  // cards only
   avatar_url: string;
   cover_url: string;
   followers: string;
@@ -23,7 +22,10 @@ export type user_row = {
   user_id: string;
   name: string;
   email: string;
-  role: string;
+
+  title_role: string;
+  permission_role: permission_role;
+
   status: user_status;
 };
 
@@ -32,7 +34,8 @@ export const users_mock: user_mock[] = [
     user_id: "u-0001",
     name: "Angelique Morse",
     email: "anny89@yahoo.com",
-    role: "content creator",
+    title_role: "content creator",
+    permission_role: "user",
     status: "banned",
     avatar_url: "https://i.pravatar.cc/200?img=11",
     cover_url:
@@ -45,7 +48,8 @@ export const users_mock: user_mock[] = [
     user_id: "u-0002",
     name: "Ariana Lang",
     email: "avery43@hotmail.com",
-    role: "it administrator",
+    title_role: "it administrator",
+    permission_role: "manager",
     status: "pending",
     avatar_url: "https://i.pravatar.cc/200?img=12",
     cover_url:
@@ -58,7 +62,8 @@ export const users_mock: user_mock[] = [
     user_id: "u-0003",
     name: "Aspen Schmitt",
     email: "mireya13@hotmail.com",
-    role: "financial planner",
+    title_role: "financial planner",
+    permission_role: "user",
     status: "banned",
     avatar_url: "https://i.pravatar.cc/200?img=32",
     cover_url:
@@ -71,7 +76,8 @@ export const users_mock: user_mock[] = [
     user_id: "u-0004",
     name: "Brycen Jimenez",
     email: "tyrel.greenholt@gmail.com",
-    role: "hr recruiter",
+    title_role: "hr recruiter",
+    permission_role: "admin",
     status: "active",
     avatar_url: "https://i.pravatar.cc/200?img=22",
     cover_url:
@@ -84,7 +90,8 @@ export const users_mock: user_mock[] = [
     user_id: "u-0005",
     name: "Chase Day",
     email: "joana.simonis84@gmail.com",
-    role: "graphic designer",
+    title_role: "graphic designer",
+    permission_role: "user",
     status: "banned",
     avatar_url: "https://i.pravatar.cc/200?img=47",
     cover_url:
@@ -95,7 +102,6 @@ export const users_mock: user_mock[] = [
   },
 ];
 
-// 给 list 页直接用：保持你现在的 user_row 类型不变
 export const users_list_rows: user_row[] = users_mock.map(
   ({ avatar_url, cover_url, followers, following, total_posts, ...row }) => row
 );
