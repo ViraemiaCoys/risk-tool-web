@@ -28,6 +28,7 @@ import DeleteIcon from "@mui/icons-material/Delete";
 
 import { use_auth } from "@/auth/auth.context";
 import { can } from "@/auth/rbac";
+import { usersService } from "@/services/users.service";
 
 import type { user_row } from "@/data/user.mock";
 import UserQuickEditDialog, { type quick_user_value } from "@/components/users/UserQuickEditDialog";
@@ -45,6 +46,7 @@ export default function UserTable(props: {
   selected_ids: string[];
   on_change_selected_ids: (next: string[]) => void;
   on_clear_selection?: () => void;
+  on_refresh?: () => void;
 }) {
   const router = useRouter();
   const { me } = use_auth();
@@ -83,10 +85,16 @@ export default function UserTable(props: {
     router.push(`/users/edit/${encodeURIComponent(String(row.user_id))}`);
   };
 
-  const on_delete = () => {
+  const on_delete = async () => {
     if (!menu_user) return;
-    console.log("delete user", menu_user.user_id);
-    close_menu();
+    try {
+      await usersService.delete(menu_user.user_id);
+      props.on_refresh?.();
+      close_menu();
+    } catch (error) {
+      console.error("删除用户失败:", error);
+      alert("删除用户失败，请重试");
+    }
   };
 
   // selection
@@ -282,10 +290,21 @@ export default function UserTable(props: {
             : null
         }
         on_close={close_quick_edit}
-        on_submit={(updated) => {
-          console.log("Quick update user", updated);
-          // TODO: 这里应该调用API更新用户信息
-          close_quick_edit();
+        on_submit={async (updated) => {
+          if (!quick_edit_user) return;
+          try {
+            await usersService.update(quick_edit_user.user_id, {
+              name: updated.name,
+              email: updated.email,
+              title_role: updated.title_role,
+              status: updated.status,
+            });
+            props.on_refresh?.();
+            close_quick_edit();
+          } catch (error) {
+            console.error("更新用户失败:", error);
+            alert("更新用户失败，请重试");
+          }
         }}
       />
     </Box>

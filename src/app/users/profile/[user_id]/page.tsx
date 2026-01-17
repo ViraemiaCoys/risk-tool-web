@@ -2,7 +2,11 @@
 
 import * as React from "react";
 import { useParams } from "next/navigation";
-import { users_mock } from "@/data/user.mock";
+import { useUser } from "@/hooks/use-users";
+import { uploadService } from "@/services/upload.service";
+import { usersService } from "@/services/users.service";
+import { postsService, type PostEntity } from "@/services/posts.service";
+import { use_auth } from "@/auth/auth.context";
 
 import {
   Avatar,
@@ -126,6 +130,14 @@ function StatCard(props: { follower: string; following: string }) {
 function AboutCard(props: { user: any }) {
   const { user } = props;
 
+  const location = React.useMemo(() => {
+    const parts = [];
+    if (user.city) parts.push(user.city);
+    if (user.state_region) parts.push(user.state_region);
+    if (user.country) parts.push(user.country);
+    return parts.length > 0 ? parts.join(", ") : "Not specified";
+  }, [user.city, user.state_region, user.country]);
+
   return (
     <Card sx={{ ...glass_card_sx, width: "100%" }}>
       <CardContent>
@@ -133,16 +145,21 @@ function AboutCard(props: { user: any }) {
           About
         </Typography>
 
-        <Typography variant="body2" sx={{ opacity: 0.82, lineHeight: 1.8 }}>
-          Tart I love sugar plum I love oat cake. Sweet roll caramels I love
-          jujubes. Topping cake wafer...
-        </Typography>
+        {user.about ? (
+          <Typography variant="body2" sx={{ opacity: 0.82, lineHeight: 1.8, mb: 2 }}>
+            {user.about}
+          </Typography>
+        ) : (
+          <Typography variant="body2" sx={{ opacity: 0.6, lineHeight: 1.8, mb: 2, fontStyle: "italic" }}>
+            No description provided.
+          </Typography>
+        )}
 
         <Stack spacing={1.25} sx={{ mt: 2 }}>
           <Stack direction="row" spacing={1.25} alignItems="center">
             <LocationOnIcon fontSize="small" sx={{ opacity: 0.75 }} />
             <Typography variant="body2" sx={{ opacity: 0.9 }}>
-              Live at <b>United Kingdom</b>
+              Live at <b>{location}</b>
             </Typography>
           </Stack>
 
@@ -153,22 +170,49 @@ function AboutCard(props: { user: any }) {
             </Typography>
           </Stack>
 
-          <Stack direction="row" spacing={1.25} alignItems="center">
-            <WorkIcon fontSize="small" sx={{ opacity: 0.75 }} />
-            <Typography
-              variant="body2"
-              sx={{ opacity: 0.9, textTransform: "capitalize" }}
-            >
-              {user.role} at <b>Gleichner, Mueller and Tromp</b>
-            </Typography>
-          </Stack>
+          {user.company && (
+            <Stack direction="row" spacing={1.25} alignItems="center">
+              <WorkIcon fontSize="small" sx={{ opacity: 0.75 }} />
+              <Typography
+                variant="body2"
+                sx={{ opacity: 0.9, textTransform: "capitalize" }}
+              >
+                {user.title_role || "Employee"} at <b>{user.company}</b>
+              </Typography>
+            </Stack>
+          )}
         </Stack>
       </CardContent>
     </Card>
   );
 }
 
-function ComposerCard() {
+function ComposerCard(props: { user_id: string; onPost?: () => void }) {
+  const [content, set_content] = React.useState("");
+  const [posting, set_posting] = React.useState(false);
+
+  const handlePost = async () => {
+    if (!content.trim()) {
+      alert("请输入内容");
+      return;
+    }
+
+    set_posting(true);
+    try {
+      await postsService.create({
+        content: content.trim(),
+        user_id: props.user_id,
+      });
+      set_content("");
+      props.onPost?.(); // 刷新帖子列表
+    } catch (error: any) {
+      console.error("发布失败:", error);
+      alert(error?.message || "发布失败，请重试");
+    } finally {
+      set_posting(false);
+    }
+  };
+
   return (
     <Card sx={{ ...glass_card_sx, width: "100%" }}>
       <CardContent sx={{ pb: 2.2 }}>
@@ -177,6 +221,9 @@ function ComposerCard() {
           multiline
           minRows={4}
           placeholder="Share what you are thinking here..."
+          value={content}
+          onChange={(e) => set_content(e.target.value)}
+          disabled={posting}
           sx={dark_textfield_sx}
         />
 
@@ -219,6 +266,8 @@ function ComposerCard() {
 
           <Button
             variant="contained"
+            disabled={posting || !content.trim()}
+            onClick={handlePost}
             sx={{
               borderRadius: 999,
               fontWeight: 900,
@@ -227,7 +276,7 @@ function ComposerCard() {
               alignSelf: { xs: "flex-end", sm: "auto" },
             }}
           >
-            Post
+            {posting ? "发布中..." : "Post"}
           </Button>
         </Stack>
       </CardContent>
@@ -272,22 +321,132 @@ function ProfileHeader(props: {
   user: any;
   tab: profile_tab_key;
   on_tab_change: (v: profile_tab_key) => void;
+  on_cover_update?: (url: string) => void;
 }) {
-  const { user, tab, on_tab_change } = props;
+  const { user, tab, on_tab_change, on_cover_update } = props;
+  const [uploading, set_uploading] = React.useState(false);
+  const coverInputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // 验证文件大小（5MB）
+    if (file.size > 5 * 1024 * 1024) {
+      alert("文件大小不能超过 5MB");
+      return;
+    }
+
+    // 验证文件类型
+    const validTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif"];
+    if (!validTypes.includes(file.type)) {
+      alert("只支持 jpeg, jpg, png, gif 格式的图片");
+      return;
+    }
+
+    set_uploading(true);
+    try {
+      const coverUrl = await uploadService.uploadCover(file);
+      on_cover_update?.(coverUrl);
+    } catch (error: any) {
+      console.error("上传封面失败:", error);
+      alert(error?.message || "上传封面失败，请重试");
+    } finally {
+      set_uploading(false);
+      if (coverInputRef.current) {
+        coverInputRef.current.value = "";
+      }
+    }
+  };
 
   return (
     <Card sx={{ ...glass_card_sx, overflow: "hidden", width: "100%" }}>
       <Box sx={{ position: "relative" }}>
-        <CardMedia
-          component="img"
-          image={user.cover_url}
-          alt="cover"
-          sx={{
-            height: { xs: 200, md: 280 },
-            objectFit: "cover",
-            filter: "saturate(1.05)",
-          }}
+        <input
+          ref={coverInputRef}
+          type="file"
+          accept="image/jpeg,image/jpg,image/png,image/gif"
+          style={{ display: "none" }}
+          onChange={handleCoverUpload}
         />
+        <Box
+          sx={{
+            position: "relative",
+            height: { xs: 200, md: 280 },
+            bgcolor: "rgba(0,0,0,0.3)",
+            cursor: on_cover_update ? "pointer" : "default",
+            "&:hover": on_cover_update
+              ? {
+                  "& .cover-upload-overlay": {
+                    opacity: 1,
+                  },
+                }
+              : {},
+          }}
+          onClick={(e) => {
+            if (!on_cover_update) return;
+            e.preventDefault();
+            e.stopPropagation();
+            coverInputRef.current?.click();
+          }}
+        >
+          {user.cover_url ? (
+            <CardMedia
+              component="img"
+              image={user.cover_url}
+              alt="cover"
+              sx={{
+                height: "100%",
+                width: "100%",
+                objectFit: "cover",
+                filter: "saturate(1.05)",
+                pointerEvents: "none", // 防止图片阻止点击事件
+              }}
+            />
+          ) : (
+            <Box
+              sx={{
+                height: "100%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                bgcolor: "rgba(0,0,0,0.2)",
+              }}
+            >
+              <Typography variant="body2" sx={{ opacity: 0.5 }}>
+                {on_cover_update ? "点击上传封面图片" : "暂无封面图片"}
+              </Typography>
+            </Box>
+          )}
+          {on_cover_update && (
+            <Box
+              className="cover-upload-overlay"
+              onClick={(e) => {
+                e.stopPropagation();
+                coverInputRef.current?.click();
+              }}
+              sx={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                bgcolor: "rgba(0,0,0,0.5)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                opacity: 0,
+                transition: "opacity 0.2s",
+                cursor: "pointer",
+                zIndex: 1,
+              }}
+            >
+              <Typography variant="body2" sx={{ color: "white", fontWeight: 800 }}>
+                {uploading ? "上传中..." : "点击更换封面"}
+              </Typography>
+            </Box>
+          )}
+        </Box>
 
         {/* dark glass overlay bar */}
         <Box
@@ -343,7 +502,7 @@ function ProfileHeader(props: {
                 letterSpacing: 0.5,
               }}
             >
-              {to_role_short(user.role)}
+              {to_role_short(user.title_role || user.role)}
             </Typography>
           </Box>
 
@@ -418,46 +577,108 @@ function PlaceholderTabCard(props: { title: string }) {
 export default function Page() {
   const params = useParams<{ user_id: string }>();
   const user_id = params.user_id;
-
-  const user = React.useMemo(
-    () => users_mock.find((u: any) => u.user_id === user_id),
-    [user_id]
-  );
+  const { user, loading, error } = useUser(user_id);
+  const { me } = use_auth();
 
   const [tab, set_tab] = React.useState<profile_tab_key>("profile");
+  const [localUser, set_localUser] = React.useState<any>(null);
+  const [posts, set_posts] = React.useState<PostEntity[]>([]);
+  const [loadingPosts, set_loadingPosts] = React.useState(false);
 
-  if (!user) {
+  // 检查是否是当前用户（可以编辑）
+  // 注意：如果 me.user_id 格式不匹配（如 u_demo_001 vs u-0001），需要调整判断逻辑
+  const isCurrentUser = React.useMemo(() => {
+    if (!me || !user_id) return false;
+    // 支持两种格式匹配
+    return me.user_id === user_id || me.user_id?.replace(/[_-]/g, '') === user_id?.replace(/[_-]/g, '');
+  }, [me, user_id]);
+  
+  // 临时：允许所有用户发帖（开发阶段）
+  const canPost = true; // 或者改为 isCurrentUser
+
+  React.useEffect(() => {
+    if (user) {
+      set_localUser({
+        ...user,
+        cover_url: (user as any).cover_url || "",
+        followers: (user as any).followers || "0",
+        following: (user as any).following || "0",
+        about: (user as any).about || "",
+      });
+    }
+  }, [user]);
+
+  // 加载帖子
+  const loadPosts = React.useCallback(async () => {
+    if (!user_id) return;
+    set_loadingPosts(true);
+    try {
+      const data = await postsService.getByUserId(user_id);
+      set_posts(data || []);
+    } catch (error: any) {
+      console.error("加载帖子失败:", error);
+      // 如果 API 不存在或出错，设置为空数组
+      set_posts([]);
+    } finally {
+      set_loadingPosts(false);
+    }
+  }, [user_id]);
+
+  React.useEffect(() => {
+    if (tab === "profile" && user_id) {
+      loadPosts();
+    }
+  }, [tab, user_id, loadPosts]);
+
+  const handleCoverUpdate = async (coverUrl: string) => {
+    if (!localUser) return;
+    try {
+      await usersService.update(user_id, { cover_url: coverUrl });
+      set_localUser({ ...localUser, cover_url: coverUrl });
+    } catch (error) {
+      console.error("更新封面失败:", error);
+    }
+  };
+
+  // 转换帖子数据格式 - 必须在所有条件返回之前调用，遵守 React Hooks 规则
+  const displayPosts: post_item[] = React.useMemo(() => {
+    if (!localUser) return [];
+    return (posts || []).map((post) => ({
+      id: post.id,
+      author_name: to_title_case(localUser.name),
+      author_avatar_url: localUser.avatar_url || "",
+      date_label: new Date(post.created_at).toLocaleDateString("en-US", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      }),
+      content: post.content,
+    }));
+  }, [posts, localUser]);
+
+  if (loading) {
     return (
       <Box sx={{ width: "100%", minWidth: 0, px: { xs: 2, md: 3 }, py: 3 }}>
         <Typography variant="h4" sx={{ fontWeight: 900 }}>
           Profile
         </Typography>
-        <Typography sx={{ mt: 1, opacity: 0.8 }}>user not found: {user_id}</Typography>
-        <Typography sx={{ mt: 1, opacity: 0.8 }}>
-          available ids: {users_mock.map((x: any) => x.user_id).join(", ")}
-        </Typography>
+        <Typography sx={{ mt: 1, opacity: 0.8 }}>加载中...</Typography>
       </Box>
     );
   }
 
-  const posts: post_item[] = [
-    {
-      id: "p1",
-      author_name: to_title_case(user.name),
-      author_avatar_url: user.avatar_url,
-      date_label: "17 Dec 2025",
-      content:
-        "The sun slowly set over the horizon, painting the sky in vibrant hues of orange and pink.",
-    },
-    {
-      id: "p2",
-      author_name: to_title_case(user.name),
-      author_avatar_url: user.avatar_url,
-      date_label: "12 Dec 2025",
-      content:
-        "Quiet progress beats noisy plans. Shipping small improvements daily is still the best strategy.",
-    },
-  ];
+  if (error || !localUser) {
+    return (
+      <Box sx={{ width: "100%", minWidth: 0, px: { xs: 2, md: 3 }, py: 3 }}>
+        <Typography variant="h4" sx={{ fontWeight: 900 }}>
+          Profile
+        </Typography>
+        <Typography sx={{ mt: 1, opacity: 0.8 }}>
+          {error ? `加载失败: ${error.message}` : `用户未找到: ${user_id}`}
+        </Typography>
+      </Box>
+    );
+  }
 
   return (
     <Box
@@ -475,13 +696,18 @@ export default function Page() {
           Profile
         </Typography>
         <Typography variant="body2" sx={{ opacity: 0.7 }}>
-          Dashboard &nbsp; • &nbsp; User &nbsp; • &nbsp; {to_title_case(user.name)}
+          Dashboard &nbsp; • &nbsp; User &nbsp; • &nbsp; {to_title_case(localUser.name)}
         </Typography>
       </Box>
 
       {/* header */}
       <Box sx={{ mb: 3 }}>
-        <ProfileHeader user={user} tab={tab} on_tab_change={set_tab} />
+        <ProfileHeader
+          user={localUser}
+          tab={tab}
+          on_tab_change={set_tab}
+          on_cover_update={isCurrentUser ? handleCoverUpdate : undefined}
+        />
       </Box>
 
       {/* body */}
@@ -489,23 +715,31 @@ export default function Page() {
         {/* ✅ 左小右大：从 md 就开始，不要等 lg */}
         <Grid item xs={12} md={4} lg={4}>
           <Stack spacing={3} sx={{ minWidth: 0 }}>
-            <StatCard follower={user.followers} following={user.following} />
-            <AboutCard user={user} />
+            <StatCard follower={localUser.followers || "0"} following={localUser.following || "0"} />
+            <AboutCard user={localUser} />
           </Stack>
         </Grid>
 
         <Grid item xs={12} md={8} >
-          {/* ✅ 右侧不允许“收缩” */}
+          {/* ✅ 右侧不允许"收缩" */}
           <Stack spacing={3} sx={{ minWidth: 0 }}>
-            <ComposerCard />
+            {canPost && <ComposerCard user_id={user_id} onPost={loadPosts} />}
 
             {/* ✅ 内容区容器：固定宽度 + 最小高度，切 tab 不会视觉塌陷/像缩小 */}
             <Box sx={{ width: "100%", minWidth: 0, minHeight: 500 }}>
               {tab === "profile" ? (
                 <Stack spacing={3} sx={{ width: "100%", minWidth: 0 }}>
-                  {posts.map((p) => (
-                    <FeedPostCard key={p.id} post={p} />
-                  ))}
+                  {loadingPosts ? (
+                    <Typography variant="body2" sx={{ opacity: 0.7, textAlign: "center", py: 4 }}>
+                      加载中...
+                    </Typography>
+                  ) : displayPosts.length === 0 ? (
+                    <Typography variant="body2" sx={{ opacity: 0.7, textAlign: "center", py: 4 }}>
+                      暂无帖子
+                    </Typography>
+                  ) : (
+                    displayPosts.map((p) => <FeedPostCard key={p.id} post={p} />)
+                  )}
                 </Stack>
               ) : (
                 <PlaceholderTabCard

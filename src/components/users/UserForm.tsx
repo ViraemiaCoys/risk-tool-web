@@ -23,6 +23,7 @@ import {
   Typography,
 } from "@mui/material";
 import PhotoCameraIcon from "@mui/icons-material/PhotoCamera";
+import { uploadService } from "@/services/upload.service";
 
 type user_status = "active" | "pending" | "banned" | "rejected";
 export type user_form_mode = "create" | "edit";
@@ -43,6 +44,7 @@ export type user_form_value = {
 
   email_verified: boolean;
   status?: user_status;
+  avatar_url?: string;
 };
 
 const country_options = [
@@ -80,8 +82,12 @@ export default function UserForm(props: {
     permission_role: "user",
     email_verified: true,
     status: "active",
+    avatar_url: "",
     ...props.initial_value,
   }));
+
+  const [uploading, set_uploading] = React.useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   // 如果 initial_value 后续变了（比如你从列表切换不同 user），同步一次
   React.useEffect(() => {
@@ -132,13 +138,52 @@ export default function UserForm(props: {
               <Stack alignItems="center" spacing={2} sx={{ flexGrow: 1 }}>
                 <Box sx={{ position: "relative" }}>
                   <Avatar
+                    src={value.avatar_url}
                     sx={{
                       width: 84,
                       height: 84,
                     }}
                   />
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/jpeg,image/jpg,image/png,image/gif"
+                    style={{ display: "none" }}
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+
+                      // 验证文件大小（3MB）
+                      if (file.size > 3 * 1024 * 1024) {
+                        alert("文件大小不能超过 3MB");
+                        return;
+                      }
+
+                      // 验证文件类型
+                      const validTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif"];
+                      if (!validTypes.includes(file.type)) {
+                        alert("只支持 jpeg, jpg, png, gif 格式的图片");
+                        return;
+                      }
+
+                      set_uploading(true);
+                      try {
+                        const avatarUrl = await uploadService.uploadAvatar(file);
+                        update("avatar_url", avatarUrl);
+                      } catch (error: any) {
+                        console.error("上传头像失败:", error);
+                        alert(error?.message || "上传头像失败，请重试");
+                      } finally {
+                        set_uploading(false);
+                        if (fileInputRef.current) {
+                          fileInputRef.current.value = "";
+                        }
+                      }
+                    }}
+                  />
                   <IconButton
                     size="small"
+                    disabled={uploading}
                     sx={{
                       position: "absolute",
                       right: -6,
@@ -146,16 +191,23 @@ export default function UserForm(props: {
                       bgcolor: "background.paper",
                       boxShadow: "0 10px 25px rgba(0,0,0,0.18)",
                     }}
-                    onClick={() => console.log("upload avatar")}
+                    onClick={() => fileInputRef.current?.click()}
+                    aria-label="upload avatar"
                   >
                     <PhotoCameraIcon fontSize="small" />
                   </IconButton>
                 </Box>
 
                 <Typography variant="caption" sx={{ opacity: 0.7, textAlign: "center" }}>
-                  Allowed *.jpeg, *.jpg, *.png, *.gif
-                  <br />
-                  max size of 3 Mb
+                  {uploading ? (
+                    "上传中..."
+                  ) : (
+                    <>
+                      Allowed *.jpeg, *.jpg, *.png, *.gif
+                      <br />
+                      max size of 3 Mb
+                    </>
+                  )}
                 </Typography>
 
                 <Divider sx={{ width: "100%", my: 1 }} />

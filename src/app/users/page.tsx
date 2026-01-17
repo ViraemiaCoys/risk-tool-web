@@ -23,7 +23,8 @@ import { use_auth } from "@/auth/auth.context";
 import { can } from "@/auth/rbac";
 
 import UserTable from "@/components/UserTable";
-import { users_list_rows as dummy_users, type user_row } from "@/data/user.mock";
+import { useUsers } from "@/hooks/use-users";
+import type { user_row } from "@/data/user.mock";
 
 type user_status = "all" | "active" | "pending" | "banned" | "rejected";
 
@@ -34,6 +35,7 @@ function normalize(value: string) {
 export default function UsersListPage() {
   const router = useRouter();
   const { me } = use_auth();
+  const { users: all_users, loading, refresh } = useUsers();
 
   const [status, set_status] = React.useState<user_status>("all");
   const [role, set_role] = React.useState<string>("all"); // 这里 role filter 还是按 title_role/permission_role 都可以，你自己选
@@ -44,24 +46,24 @@ export default function UsersListPage() {
   // role filter（这里我用 permission_role 做筛选更合理）
   const all_roles = React.useMemo(() => {
     const roles = new Set<string>();
-    dummy_users.forEach((u) => roles.add(String(u.permission_role)));
+    all_users.forEach((u) => roles.add(String(u.permission_role)));
     return ["all", ...Array.from(roles)];
-  }, []);
+  }, [all_users]);
 
   const counts = React.useMemo(() => {
     const c = { all: 0, active: 0, pending: 0, banned: 0, rejected: 0 };
-    dummy_users.forEach((u) => {
+    all_users.forEach((u) => {
       c.all += 1;
       const s = normalize(String(u.status || "")) as keyof typeof c;
       if (c[s] !== undefined) c[s] += 1;
     });
     return c;
-  }, []);
+  }, [all_users]);
 
   const filtered_users = React.useMemo(() => {
     const q = normalize(query);
 
-    return dummy_users.filter((u) => {
+    return all_users.filter((u) => {
       const matches_status =
         status === "all" ? true : normalize(String(u.status || "")) === status;
 
@@ -77,7 +79,7 @@ export default function UsersListPage() {
 
       return matches_status && matches_role && matches_query;
     });
-  }, [status, role, query]);
+  }, [status, role, query, all_users]);
 
   React.useEffect(() => {
     const filtered_id_set = new Set(filtered_users.map((u) => String(u.user_id)));
@@ -156,12 +158,21 @@ export default function UsersListPage() {
 
       <Divider sx={{ mb: 2 }} />
 
-      <UserTable
-        rows={filtered_users as unknown as user_row[]}
-        selected_ids={selected_ids}
-        on_change_selected_ids={set_selected_ids}
-        on_clear_selection={clear_selection}
-      />
+      {loading ? (
+        <Box sx={{ py: 4, textAlign: "center" }}>
+          <Typography variant="body2" sx={{ opacity: 0.7 }}>
+            加载中...
+          </Typography>
+        </Box>
+      ) : (
+        <UserTable
+          rows={filtered_users as unknown as user_row[]}
+          selected_ids={selected_ids}
+          on_change_selected_ids={set_selected_ids}
+          on_clear_selection={clear_selection}
+          on_refresh={refresh}
+        />
+      )}
     </Box>
   );
 }

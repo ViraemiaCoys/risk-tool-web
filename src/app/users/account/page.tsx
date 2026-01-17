@@ -33,6 +33,8 @@ import SettingsIcon from "@mui/icons-material/Settings";
 
 import { use_auth } from "@/auth/auth.context";
 import type { me_user } from "@/auth/auth.types";
+import { uploadService } from "@/services/upload.service";
+import { usersService } from "@/services/users.service";
 
 type account_tab = "general" | "billing" | "notifications" | "social" | "security";
 
@@ -67,8 +69,12 @@ export default function Page() {
     message: string;
   }>({ open: false, severity: "success", message: "" });
 
-  // 表单错误（目前只做 phone）
-  const [errors, set_errors] = React.useState<{ phone?: string }>({});
+  // 表单错误
+  const [errors, set_errors] = React.useState<{ phone?: string; email?: string }>({});
+
+  // 头像上传相关
+  const [uploading, set_uploading] = React.useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   React.useEffect(() => {
     set_value(me);
@@ -79,8 +85,13 @@ export default function Page() {
   };
 
   const validate = () => {
-    const next_errors: { phone?: string } = {};
+    const next_errors: { phone?: string; email?: string } = {};
     if (!value.phone.trim()) next_errors.phone = "Phone number is required.";
+    if (!value.email.trim()) {
+      next_errors.email = "Email is required.";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.email)) {
+      next_errors.email = "Please enter a valid email address.";
+    }
     set_errors(next_errors);
     return Object.keys(next_errors).length === 0;
   };
@@ -93,8 +104,23 @@ export default function Page() {
 
     set_saving(true);
     try {
+      // 调用后端 API 更新用户信息
+      await usersService.update(me.user_id, {
+        name: value.name,
+        email: value.email,
+        phone: value.phone,
+        address: value.address,
+        country: value.country_code,
+        state_region: value.state_region,
+        city: value.city,
+        zip_code: value.zip_code,
+        avatar_url: value.avatar_url,
+      });
+
+      // 更新本地状态
       await patch_me({
         name: value.name,
+        email: value.email,
         phone: value.phone,
         address: value.address,
         country_code: value.country_code,
@@ -107,10 +133,10 @@ export default function Page() {
       });
 
       set_toast({ open: true, severity: "success", message: "Saved successfully." });
-      console.log("save account", value);
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      set_toast({ open: true, severity: "error", message: "Save failed. Check console for details." });
+      const errorMessage = e?.message || "Save failed. Check console for details.";
+      set_toast({ open: true, severity: "error", message: errorMessage });
     } finally {
       set_saving(false);
     }
@@ -190,8 +216,47 @@ export default function Page() {
                 <Stack alignItems="center" spacing={2}>
                   <Box sx={{ position: "relative" }}>
                     <Avatar src={value.avatar_url} sx={{ width: 84, height: 84 }} />
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/jpeg,image/jpg,image/png,image/gif"
+                      style={{ display: "none" }}
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+
+                        // 验证文件大小（3MB）
+                        if (file.size > 3 * 1024 * 1024) {
+                          set_toast({ open: true, severity: "error", message: "文件大小不能超过 3MB" });
+                          return;
+                        }
+
+                        // 验证文件类型
+                        const validTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif"];
+                        if (!validTypes.includes(file.type)) {
+                          set_toast({ open: true, severity: "error", message: "只支持 jpeg, jpg, png, gif 格式的图片" });
+                          return;
+                        }
+
+                        set_uploading(true);
+                        try {
+                          const avatarUrl = await uploadService.uploadAvatar(file);
+                          update("avatar_url", avatarUrl);
+                          set_toast({ open: true, severity: "success", message: "头像上传成功" });
+                        } catch (error: any) {
+                          console.error("上传头像失败:", error);
+                          set_toast({ open: true, severity: "error", message: error?.message || "上传头像失败，请重试" });
+                        } finally {
+                          set_uploading(false);
+                          if (fileInputRef.current) {
+                            fileInputRef.current.value = "";
+                          }
+                        }
+                      }}
+                    />
                     <IconButton
                       size="small"
+                      disabled={uploading}
                       sx={{
                         position: "absolute",
                         right: -6,
@@ -199,9 +264,7 @@ export default function Page() {
                         bgcolor: "background.paper",
                         boxShadow: "0 10px 25px rgba(0,0,0,0.18)",
                       }}
-                      onClick={() =>
-                        set_toast({ open: true, severity: "warning", message: "Avatar upload will be implemented later." })
-                      }
+                      onClick={() => fileInputRef.current?.click()}
                       aria-label="upload avatar"
                     >
                       <PhotoCameraIcon fontSize="small" />
@@ -252,8 +315,9 @@ export default function Page() {
                       label="Email address"
                       fullWidth
                       value={value.email}
-                      helperText="Email is used as your login account and cannot be edited."
-                      InputProps={{ readOnly: true }}
+                      onChange={(e) => update("email", e.target.value)}
+                      error={Boolean(errors.email)}
+                      helperText={errors.email || " "}
                     />
                   </Grid>
 
