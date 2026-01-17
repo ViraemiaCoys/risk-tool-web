@@ -2,9 +2,6 @@
 
 import * as React from "react";
 import type { user_role } from "@/auth/auth.types";
-import { use_auth } from "@/auth/auth.context";
-import { can_change_permission_role } from "@/auth/rbac";
-import type { user_role } from "@/auth/auth.types";
 
 import {
   Avatar,
@@ -98,14 +95,24 @@ export default function UserForm(props: {
 
   const field_sx = {
     "& .MuiOutlinedInput-root": {
-      borderRadius: 2.5,
-      backgroundColor: "rgba(255,255,255,0.03)",
-      "& fieldset": { borderColor: "rgba(255,255,255,0.18)" },
-      "&:hover fieldset": { borderColor: "rgba(255,255,255,0.28)" },
-      "&.Mui-focused fieldset": { borderColor: "rgba(46, 204, 113, 0.9)" },
+      borderRadius: 2,
+      backgroundColor: "rgba(255,255,255,0.05)",
+      "& fieldset": { borderColor: "rgba(255,255,255,0.12)" },
+      "&:hover fieldset": { borderColor: "rgba(255,255,255,0.2)" },
+      "&.Mui-focused fieldset": { borderColor: "primary.main" },
+      "&:hover": {
+        backgroundColor: "rgba(255,255,255,0.08)",
+      },
+      "&.Mui-focused": {
+        backgroundColor: "rgba(255,255,255,0.08)",
+      },
     },
-    "& .MuiInputLabel-root": { color: "rgba(255,255,255,0.65)" },
-    "& .MuiInputBase-input": { color: "rgba(255,255,255,0.92)" },
+    "& .MuiInputLabel-root": {
+      color: "rgba(255,255,255,0.7)",
+    },
+    "& .MuiInputBase-input": {
+      color: "rgba(255,255,255,0.9)",
+    },
   } as const;
 
   return (
@@ -119,111 +126,93 @@ export default function UserForm(props: {
       </Typography>
 
       <Stack direction={{ xs: "column", md: "row" }} spacing={3} alignItems="stretch" sx={{ minWidth: 0 }}>
-        <Box sx={{ width: { xs: "100%", md: 280 }, flexShrink: 0 }}>
-          <Card sx={{ borderRadius: 3, height: "100%", background: "rgba(255,255,255,0.03)" }}>
-            <CardContent sx={{ p: 3 }}>
-              <Box sx={{ display: "flex", justifyContent: "center", mb: 2 }}>
+        <Box sx={{ width: { xs: "100%", md: 300 }, flexShrink: 0 }}>
+          <Card sx={{ borderRadius: 3, height: "100%" }}>
+            <CardContent sx={{ py: 3, display: "flex", flexDirection: "column", height: "100%" }}>
+              <Stack alignItems="center" spacing={2} sx={{ flexGrow: 1 }}>
                 <Box sx={{ position: "relative" }}>
                   <Avatar
                     sx={{
-                      width: 112,
-                      height: 112,
-                      bgcolor: "rgba(255,255,255,0.06)",
-                      border: "1px solid rgba(255,255,255,0.12)",
+                      width: 84,
+                      height: 84,
                     }}
                   />
                   <IconButton
                     size="small"
                     sx={{
                       position: "absolute",
-                      right: 6,
-                      bottom: 6,
-                      bgcolor: "rgba(0,0,0,0.35)",
-                      border: "1px solid rgba(255,255,255,0.12)",
-                      "&:hover": { bgcolor: "rgba(0,0,0,0.55)" },
+                      right: -6,
+                      bottom: -6,
+                      bgcolor: "background.paper",
+                      boxShadow: "0 10px 25px rgba(0,0,0,0.18)",
                     }}
                     onClick={() => console.log("upload avatar")}
                   >
                     <PhotoCameraIcon fontSize="small" />
                   </IconButton>
                 </Box>
-              </Box>
 
-              <Typography variant="body2" sx={{ textAlign: "center", opacity: 0.65, mb: 2 }}>
-                Upload photo
-                <br />
-                <span style={{ fontSize: 12, opacity: 0.75 }}>
-                  allowed *.jpeg, *.jpg, *.png, *.gif
-                </span>
-              </Typography>
+                <Typography variant="caption" sx={{ opacity: 0.7, textAlign: "center" }}>
+                  Allowed *.jpeg, *.jpg, *.png, *.gif
+                  <br />
+                  max size of 3 Mb
+                </Typography>
 
-              <Divider sx={{ borderColor: "rgba(255,255,255,0.08)", my: 2 }} />
+                <Divider sx={{ width: "100%", my: 1 }} />
 
-              <Typography fontWeight={800} sx={{ mb: 1 }}>
-                Email verified
-              </Typography>
-
-              <Typography variant="body2" sx={{ opacity: 0.7, mb: 1.5 }}>
-                Disabling this will automatically send the user a verification email.
-              </Typography>
-
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={value.email_verified}
-                    onChange={(e) => update("email_verified", e.target.checked)}
+                <Box sx={{ width: "100%" }}>
+                  <Typography fontWeight={800} sx={{ mb: 1 }}>
+                    Email verified
+                  </Typography>
+                  <Typography variant="body2" sx={{ opacity: 0.7, mb: 1.5 }}>
+                    Disabling this will automatically send the user a verification email.
+                  </Typography>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={value.email_verified}
+                        onChange={(e) => update("email_verified", e.target.checked)}
+                      />
+                    }
+                    label=""
+                    sx={{ m: 0 }}
                   />
-                }
-                label=""
-                sx={{ m: 0 }}
-              />
+                </Box>
+
+                {props.on_delete && <Box sx={{ flexGrow: 1 }} />}
+              </Stack>
+
+              {props.on_delete && (
+                <Button
+                  variant="contained"
+                  color="error"
+                  size="small"
+                  fullWidth
+                  sx={{ borderRadius: 2, textTransform: "none", fontWeight: 800, mt: 2 }}
+                  onClick={props.on_delete}
+                >
+                  Delete user
+                </Button>
+              )}
             </CardContent>
           </Card>
         </Box>
 
         <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Card sx={{ borderRadius: 3, height: "100%", background: "rgba(255,255,255,0.03)" }}>
-            <CardContent sx={{ p: 3 }}>
-              <Typography variant="h6" fontWeight={900} sx={{ mb: 2 }}>
-                Details
-              </Typography>
+          <Card sx={{ borderRadius: 3, height: "100%" }}>
+            <CardContent sx={{ p: { xs: 2, md: 3 } }}>
 
-              <Grid container spacing={2}>
+              <Grid container spacing={2.5}>
+                {/* Row 1: Name | Email */}
                 <Grid item xs={12} md={6}>
-                  <TextField label="Full name" fullWidth value={value.name} onChange={(e) => update("name", e.target.value)} sx={field_sx} />
+                  <TextField label="Name" fullWidth value={value.name} onChange={(e) => update("name", e.target.value)} sx={field_sx} />
                 </Grid>
 
                 <Grid item xs={12} md={6}>
                   <TextField label="Email address" fullWidth value={value.email} onChange={(e) => update("email", e.target.value)} sx={field_sx} />
                 </Grid>
 
-                {/* Permission role：仅当 show_permission_role 为 true 才展示 */}
-                {props.show_permission_role ? (
-                  <Grid item xs={12} md={6}>
-                    <Typography variant="caption" sx={{ display: "block", mb: 0.5, opacity: 0.75 }}>
-                      Permission role
-                    </Typography>
-                    <Select
-                      fullWidth
-                      value={value.permission_role}
-                      onChange={(e) => update("permission_role", e.target.value as user_role)}
-                      disabled={!props.allow_edit_permission_role}
-                      sx={{
-                        ...field_sx,
-                        "& .MuiOutlinedInput-root": {
-                          ...(field_sx as any)["& .MuiOutlinedInput-root"],
-                        },
-                        color: "rgba(255,255,255,0.92)",
-                      }}
-                    >
-                      <MenuItem value="admin">admin</MenuItem>
-                      <MenuItem value="manager">manager</MenuItem>
-                      <MenuItem value="user">user</MenuItem>
-                    </Select>
-                  </Grid>
-                ) : null}
-
-                {/* phone */}
+                {/* Row 2: Phone | Address */}
                 <Grid item xs={12} md={6}>
                   <TextField
                     label="Phone number"
@@ -241,16 +230,14 @@ export default function UserForm(props: {
                               disableUnderline
                               sx={{
                                 minWidth: 120,
-                                color: "rgba(255,255,255,0.92)",
                                 "& .MuiSelect-select": { display: "flex", alignItems: "center", gap: 1, py: 0 },
-                                "& .MuiSvgIcon-root": { color: "rgba(255,255,255,0.55)" },
                               }}
                               renderValue={(selected) => {
                                 const c = country_options.find((x) => x.value === selected) ?? country_options[0];
                                 return (
                                   <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                                     <span>{c.flag}</span>
-                                    <Typography variant="body2" sx={{ opacity: 0.85 }}>
+                                    <Typography variant="body2">
                                       {c.dial}
                                     </Typography>
                                   </Box>
@@ -277,21 +264,63 @@ export default function UserForm(props: {
                 </Grid>
 
                 <Grid item xs={12} md={6}>
-                  <TextField label="City" fullWidth value={value.city} onChange={(e) => update("city", e.target.value)} sx={field_sx} />
+                  <TextField label="Address" fullWidth value={value.address} onChange={(e) => update("address", e.target.value)} sx={field_sx} />
+                </Grid>
+
+                {/* Row 3: Country | State/region */}
+                <Grid item xs={12} md={6}>
+                  <FormControl fullWidth>
+                    <Typography variant="caption" sx={{ display: "block", mb: 0.5, opacity: 0.75 }}>
+                      Country
+                    </Typography>
+                    <Select
+                      value={value.country}
+                      onChange={(e) => update("country", String(e.target.value))}
+                      sx={{
+                        ...field_sx,
+                        "& .MuiSelect-select": {
+                          color: "rgba(255,255,255,0.9)",
+                        },
+                        "& .MuiSvgIcon-root": {
+                          color: "rgba(255,255,255,0.5)",
+                        },
+                      }}
+                      renderValue={(selected) => {
+                        const c = country_options.find((x) => x.value === selected) ?? country_options[0];
+                        return (
+                          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                            <span>{c.flag}</span>
+                            <Typography variant="body2">{c.label}</Typography>
+                          </Box>
+                        );
+                      }}
+                    >
+                      {country_options.map((c) => (
+                        <MenuItem key={c.value} value={c.value}>
+                          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                            <span>{c.flag}</span>
+                            <Typography variant="body2">{c.label}</Typography>
+                          </Box>
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
                 </Grid>
 
                 <Grid item xs={12} md={6}>
                   <TextField label="State/region" fullWidth value={value.state_region} onChange={(e) => update("state_region", e.target.value)} sx={field_sx} />
                 </Grid>
 
+                {/* Row 4: City | Zip/code */}
+                <Grid item xs={12} md={6}>
+                  <TextField label="City" fullWidth value={value.city} onChange={(e) => update("city", e.target.value)} sx={field_sx} />
+                </Grid>
+
                 <Grid item xs={12} md={6}>
                   <TextField label="Zip/code" fullWidth value={value.zip_code} onChange={(e) => update("zip_code", e.target.value)} sx={field_sx} />
                 </Grid>
 
-                <Grid item xs={12} md={6}>
-                  <TextField label="Address" fullWidth value={value.address} onChange={(e) => update("address", e.target.value)} sx={field_sx} />
-                </Grid>
-
+                {/* Row 5: Company | Title/Role */}
                 <Grid item xs={12} md={6}>
                   <TextField label="Company" fullWidth value={value.company} onChange={(e) => update("company", e.target.value)} sx={field_sx} />
                 </Grid>
@@ -300,38 +329,81 @@ export default function UserForm(props: {
                   <TextField label="Title / Role" fullWidth value={value.title_role} onChange={(e) => update("title_role", e.target.value)} sx={field_sx} />
                 </Grid>
 
-                <Grid item xs={12} md={6}>
-                  <Typography variant="caption" sx={{ display: "block", mb: 0.5, opacity: 0.75 }}>
-                    Status
-                  </Typography>
-                  <Select
-                    fullWidth
-                    value={value.status ?? "active"}
-                    onChange={(e) => update("status", e.target.value as user_status)}
-                    sx={{
-                      ...field_sx,
-                      "& .MuiOutlinedInput-root": {
-                        ...(field_sx as any)["& .MuiOutlinedInput-root"],
-                      },
-                      color: "rgba(255,255,255,0.92)",
-                    }}
-                  >
-                    <MenuItem value="active">active</MenuItem>
-                    <MenuItem value="pending">pending</MenuItem>
-                    <MenuItem value="banned">banned</MenuItem>
-                    <MenuItem value="rejected">rejected</MenuItem>
-                  </Select>
-                </Grid>
+                {/* Permission role：仅当 show_permission_role 为 true 才展示 */}
+                {props.show_permission_role ? (
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="caption" sx={{ display: "block", mb: 0.5, opacity: 0.75 }}>
+                      Permission role
+                    </Typography>
+                    <Select
+                      fullWidth
+                      value={value.permission_role}
+                      onChange={(e) => update("permission_role", e.target.value as user_role)}
+                      disabled={!props.allow_edit_permission_role}
+                      sx={{
+                        ...field_sx,
+                        "& .MuiSelect-select": {
+                          color: "rgba(255,255,255,0.9)",
+                        },
+                        "& .MuiSvgIcon-root": {
+                          color: "rgba(255,255,255,0.5)",
+                        },
+                      }}
+                    >
+                      <MenuItem value="admin">admin</MenuItem>
+                      <MenuItem value="manager">manager</MenuItem>
+                      <MenuItem value="user">user</MenuItem>
+                    </Select>
+                  </Grid>
+                ) : null}
+
+                {/* Status：仅编辑模式显示 */}
+                {mode === "edit" && (
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="caption" sx={{ display: "block", mb: 0.5, opacity: 0.75 }}>
+                      Status
+                    </Typography>
+                    <Select
+                      fullWidth
+                      value={value.status ?? "active"}
+                      onChange={(e) => update("status", e.target.value as user_status)}
+                      sx={{
+                        ...field_sx,
+                        "& .MuiSelect-select": {
+                          color: "rgba(255,255,255,0.9)",
+                        },
+                        "& .MuiSvgIcon-root": {
+                          color: "rgba(255,255,255,0.5)",
+                        },
+                      }}
+                    >
+                      <MenuItem value="active">active</MenuItem>
+                      <MenuItem value="pending">pending</MenuItem>
+                      <MenuItem value="banned">banned</MenuItem>
+                      <MenuItem value="rejected">rejected</MenuItem>
+                    </Select>
+                  </Grid>
+                )}
               </Grid>
 
-              <Stack direction="row" justifyContent="flex-end" spacing={2} sx={{ mt: 3 }}>
-                <Button variant="outlined" onClick={props.on_cancel}>
-                  Cancel
-                </Button>
-                <Button variant="contained" onClick={() => props.on_submit(value)}>
+              <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 3 }}>
+                {props.on_cancel ? (
+                  <Button
+                    variant="outlined"
+                    onClick={props.on_cancel}
+                    sx={{ borderRadius: 2, textTransform: "none", fontWeight: 800, mr: 2 }}
+                  >
+                    Cancel
+                  </Button>
+                ) : null}
+                <Button
+                  variant="contained"
+                  onClick={() => props.on_submit(value)}
+                  sx={{ borderRadius: 2, textTransform: "none", fontWeight: 800 }}
+                >
                   {mode === "create" ? "Create user" : "Save changes"}
                 </Button>
-              </Stack>
+              </Box>
             </CardContent>
           </Card>
         </Box>

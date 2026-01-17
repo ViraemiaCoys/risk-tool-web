@@ -4,7 +4,7 @@ export const me_mock: me_user = {
   user_id: "u_demo_001",
   name: "Jaydon Frankie",
   email: "demo@minimals.cc",
-  role: "user",
+  role: "manager",
 
   phone: "(416) 555-0198",             
   address: "90210 Broadway Blvd",

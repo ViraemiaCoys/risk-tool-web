@@ -10,6 +10,7 @@ type auth_context_value = {
   me: me_user;
   set_me: React.Dispatch<React.SetStateAction<me_user>>;
   patch_me: (patch: Partial<me_user>) => Promise<void>;
+  switch_role: (role: me_user["role"]) => void;
 };
 
 const AuthContext = React.createContext<auth_context_value | null>(null);
@@ -44,7 +45,14 @@ export function AuthProvider(props: { children: React.ReactNode }) {
     await new Promise((r) => setTimeout(r, 250));
   }, []);
 
-  const value = React.useMemo(() => ({ me, set_me, patch_me }), [me, patch_me]);
+  const switch_role = React.useCallback((role: me_user["role"]) => {
+    set_me((prev) => ({ ...prev, role }));
+  }, []);
+
+  const value = React.useMemo(
+    () => ({ me, set_me, patch_me, switch_role }),
+    [me, patch_me, switch_role]
+  );
 
   return <AuthContext.Provider value={value}>{props.children}</AuthContext.Provider>;
 }

@@ -22,15 +22,8 @@ export type quick_user_value = {
   user_id: string;
   name: string;
   email: string;
-  phone?: string;
-  country?: string;
-  state_region?: string;
-  city?: string;
-  address?: string;
-  zip_code?: string;
-  company?: string;
-  role?: string;
-  status?: user_status;
+  title_role: string;
+  status: user_status;
 };
 
 export default function UserQuickEditDialog(props: {
@@ -61,22 +54,22 @@ export default function UserQuickEditDialog(props: {
         {value ? (
           <Box>
             <Typography variant="body2" sx={{ opacity: 0.75, mb: 2 }}>
-              Update common fields quickly. For full details, use the full edit page.
+              Quick edit common fields. For full details, use &quot;Full edit&quot; from the Actions menu.
             </Typography>
 
             <Divider sx={{ mb: 2 }} />
 
-            <Grid container spacing={2}>
-              <Grid item xs={12} md={6}>
+            <Grid container spacing={2.5}>
+              <Grid item xs={12}>
                 <TextField
-                  label="Full name"
+                  label="Name"
                   fullWidth
                   value={value.name}
                   onChange={(e) => update("name", e.target.value)}
                 />
               </Grid>
 
-              <Grid item xs={12} md={6}>
+              <Grid item xs={12}>
                 <TextField
                   label="Email address"
                   fullWidth
@@ -85,79 +78,16 @@ export default function UserQuickEditDialog(props: {
                 />
               </Grid>
 
-              <Grid item xs={12} md={6}>
+              <Grid item xs={12}>
                 <TextField
-                  label="Phone number"
+                  label="Title / Role"
                   fullWidth
-                  value={value.phone ?? ""}
-                  onChange={(e) => update("phone", e.target.value)}
+                  value={value.title_role}
+                  onChange={(e) => update("title_role", e.target.value)}
                 />
               </Grid>
 
-              <Grid item xs={12} md={6}>
-                <TextField
-                  label="Country"
-                  fullWidth
-                  value={value.country ?? ""}
-                  onChange={(e) => update("country", e.target.value)}
-                />
-              </Grid>
-
-              <Grid item xs={12} md={6}>
-                <TextField
-                  label="State/region"
-                  fullWidth
-                  value={value.state_region ?? ""}
-                  onChange={(e) => update("state_region", e.target.value)}
-                />
-              </Grid>
-
-              <Grid item xs={12} md={6}>
-                <TextField
-                  label="City"
-                  fullWidth
-                  value={value.city ?? ""}
-                  onChange={(e) => update("city", e.target.value)}
-                />
-              </Grid>
-
-              <Grid item xs={12} md={6}>
-                <TextField
-                  label="Address"
-                  fullWidth
-                  value={value.address ?? ""}
-                  onChange={(e) => update("address", e.target.value)}
-                />
-              </Grid>
-
-              <Grid item xs={12} md={6}>
-                <TextField
-                  label="Zip/code"
-                  fullWidth
-                  value={value.zip_code ?? ""}
-                  onChange={(e) => update("zip_code", e.target.value)}
-                />
-              </Grid>
-
-              <Grid item xs={12} md={6}>
-                <TextField
-                  label="Company"
-                  fullWidth
-                  value={value.company ?? ""}
-                  onChange={(e) => update("company", e.target.value)}
-                />
-              </Grid>
-
-              <Grid item xs={12} md={6}>
-                <TextField
-                  label="Role"
-                  fullWidth
-                  value={value.role ?? ""}
-                  onChange={(e) => update("role", e.target.value)}
-                />
-              </Grid>
-
-              <Grid item xs={12} md={6}>
+              <Grid item xs={12}>
                 <Typography variant="caption" sx={{ display: "block", mb: 0.5, opacity: 0.75 }}>
                   Status
                 </Typography>
@@ -175,15 +105,20 @@ export default function UserQuickEditDialog(props: {
             </Grid>
 
             <Stack direction="row" justifyContent="flex-end" spacing={1.5} sx={{ mt: 3 }}>
-              <Button variant="outlined" onClick={props.on_close}>
-                cancel
+              <Button
+                variant="outlined"
+                onClick={props.on_close}
+                sx={{ borderRadius: 2, textTransform: "none", fontWeight: 800 }}
+              >
+                Cancel
               </Button>
               <Button
                 variant="contained"
                 disabled={!can_submit}
                 onClick={() => value && props.on_submit(value)}
+                sx={{ borderRadius: 2, textTransform: "none", fontWeight: 800 }}
               >
-                update
+                Update
               </Button>
             </Stack>
           </Box>

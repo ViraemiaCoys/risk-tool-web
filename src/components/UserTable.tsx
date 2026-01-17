@@ -30,6 +30,7 @@ import { use_auth } from "@/auth/auth.context";
 import { can } from "@/auth/rbac";
 
 import type { user_row } from "@/data/user.mock";
+import UserQuickEditDialog, { type quick_user_value } from "@/components/users/UserQuickEditDialog";
 
 function render_status(status: user_row["status"]) {
   if (status === "active") return <Chip label="Active" size="small" color="success" variant="outlined" />;
@@ -50,6 +51,8 @@ export default function UserTable(props: {
 
   const [menu_anchor, set_menu_anchor] = React.useState<null | HTMLElement>(null);
   const [menu_user, set_menu_user] = React.useState<user_row | null>(null);
+  const [quick_edit_open, set_quick_edit_open] = React.useState(false);
+  const [quick_edit_user, set_quick_edit_user] = React.useState<user_row | null>(null);
 
   const open_menu = (event: React.MouseEvent<HTMLElement>, row: user_row) => {
     event.stopPropagation();
@@ -60,6 +63,16 @@ export default function UserTable(props: {
   const close_menu = () => {
     set_menu_anchor(null);
     set_menu_user(null);
+  };
+
+  const open_quick_edit = (row: user_row) => {
+    set_quick_edit_user(row);
+    set_quick_edit_open(true);
+  };
+
+  const close_quick_edit = () => {
+    set_quick_edit_open(false);
+    set_quick_edit_user(null);
   };
 
   const go_profile = (row: user_row) => {
@@ -173,29 +186,36 @@ export default function UserTable(props: {
                   <TableCell sx={{ textTransform: "lowercase" }}>{row.permission_role}</TableCell>
                   <TableCell>{render_status(row.status)}</TableCell>
 
+                  {/* 只有有权限的用户才显示快速编辑按钮 */}
                   <TableCell align="right">
-                    <Tooltip title={allow_update ? "Edit" : "No permission"}>
-                      <span>
+                    {allow_update ? (
+                      <Tooltip title="Quick edit">
                         <IconButton
                           size="small"
-                          disabled={!allow_update}
                           onClick={(e) => {
                             e.stopPropagation();
-                            go_full_edit(row);
+                            open_quick_edit(row);
                           }}
                         >
                           <EditIcon fontSize="small" />
                         </IconButton>
-                      </span>
-                    </Tooltip>
+                      </Tooltip>
+                    ) : (
+                      <Box sx={{ width: 40, height: 40 }} /> // 占位保持对齐
+                    )}
                   </TableCell>
 
+                  {/* 只有有删除或编辑权限的用户才显示Actions菜单 */}
                   <TableCell align="right">
-                    <Tooltip title="Actions">
-                      <IconButton size="small" onClick={(e) => open_menu(e, row)}>
-                        <MoreVertIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
+                    {allow_update || allow_delete ? (
+                      <Tooltip title="Actions">
+                        <IconButton size="small" onClick={(e) => open_menu(e, row)}>
+                          <MoreVertIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    ) : (
+                      <Box sx={{ width: 40, height: 40 }} /> // 占位保持对齐
+                    )}
                   </TableCell>
                 </TableRow>
               );
@@ -246,6 +266,28 @@ export default function UserTable(props: {
           Delete
         </MenuItem>
       </Menu>
+
+      {/* Quick Edit Dialog */}
+      <UserQuickEditDialog
+        open={quick_edit_open}
+        user={
+          quick_edit_user
+            ? {
+                user_id: String(quick_edit_user.user_id),
+                name: quick_edit_user.name,
+                email: quick_edit_user.email,
+                title_role: quick_edit_user.title_role,
+                status: quick_edit_user.status ?? "active",
+              }
+            : null
+        }
+        on_close={close_quick_edit}
+        on_submit={(updated) => {
+          console.log("Quick update user", updated);
+          // TODO: 这里应该调用API更新用户信息
+          close_quick_edit();
+        }}
+      />
     </Box>
   );
 }

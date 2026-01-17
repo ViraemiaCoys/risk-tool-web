@@ -4,11 +4,11 @@ import * as React from "react";
 import { Box, Card, CardContent, Typography, Button } from "@mui/material";
 import { useRouter } from "next/navigation";
 import { use_auth } from "@/auth/auth.context";
-import { can, type user_action, type subject_user } from "@/auth/rbac";
+import { can, type rbac_action, type user_target } from "@/auth/rbac";
 
 export default function RequirePermission(props: {
-  action: user_action;
-  target?: subject_user;
+  action: rbac_action;
+  target?: user_target;
   children: React.ReactNode;
 }) {
   const { me } = use_auth();
@@ -20,7 +20,7 @@ export default function RequirePermission(props: {
 
   return (
     <Box sx={{ px: { xs: 2, md: 3 }, py: 3 }}>
-      <Card sx={{ borderRadius: 3 }}>
+      <Card sx={{ borderRadius: 3, background: "rgba(255,255,255,0.03)" }}>
         <CardContent>
           <Typography variant="h5" sx={{ fontWeight: 900, mb: 1 }}>
             Access denied
