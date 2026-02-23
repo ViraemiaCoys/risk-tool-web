@@ -21,17 +21,19 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
+import useMediaQuery from "@mui/material/useMediaQuery";
+import { useTheme } from "@mui/material/styles";
 
 import EditIcon from "@mui/icons-material/Edit";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import DeleteIcon from "@mui/icons-material/Delete";
 
-import { use_auth } from "@/auth/auth.context";
+import { useAuth } from "@/auth/auth.context";
 import { can } from "@/auth/rbac";
 import { usersService } from "@/services/users.service";
 
 import type { user_row } from "@/data/user.mock";
-import UserQuickEditDialog, { type quick_user_value } from "@/components/users/UserQuickEditDialog";
+import UserQuickEditDialog from "@/components/users/UserQuickEditDialog";
 
 function render_status(status: user_row["status"]) {
   if (status === "active") return <Chip label="Active" size="small" color="success" variant="outlined" />;
@@ -49,7 +51,9 @@ export default function UserTable(props: {
   on_refresh?: () => void;
 }) {
   const router = useRouter();
-  const { me } = use_auth();
+  const { me } = useAuth();
+  const theme = useTheme();
+  const is_md_up = useMediaQuery(theme.breakpoints.up("md"));
 
   const [menu_anchor, set_menu_anchor] = React.useState<null | HTMLElement>(null);
   const [menu_user, set_menu_user] = React.useState<user_row | null>(null);
@@ -122,116 +126,222 @@ export default function UserTable(props: {
     }
   };
 
+  const selection_banner = props.selected_ids.length > 0 ? (
+    <Box
+      sx={{
+        px: 2,
+        py: 1,
+        bgcolor: "success.main",
+        color: "success.contrastText",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+      }}
+    >
+      <Typography variant="subtitle2">{props.selected_ids.length} selected</Typography>
+      <IconButton size="small" color="inherit" onClick={() => props.on_clear_selection?.()}>
+        <DeleteIcon fontSize="small" />
+      </IconButton>
+    </Box>
+  ) : null;
+
   return (
     <Box>
-      <TableContainer component={Paper} sx={{ overflow: "hidden" }}>
-        {props.selected_ids.length > 0 ? (
-          <Box
-            sx={{
-              px: 2,
-              py: 1,
-              bgcolor: "success.main",
-              color: "success.contrastText",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-            }}
-          >
-            <Typography variant="subtitle2">{props.selected_ids.length} selected</Typography>
-            <IconButton size="small" color="inherit" onClick={() => props.on_clear_selection?.()}>
-              <DeleteIcon fontSize="small" />
-            </IconButton>
-          </Box>
-        ) : null}
+      {is_md_up ? (
+        <TableContainer component={Paper} sx={{ overflow: "hidden" }}>
+          {selection_banner}
 
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell padding="checkbox">
-                <Checkbox
-                  indeterminate={some_selected}
-                  checked={all_selected}
-                  onChange={(e) => toggle_all(e.target.checked)}
-                />
-              </TableCell>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell padding="checkbox">
+                  <Checkbox
+                    indeterminate={some_selected}
+                    checked={all_selected}
+                    onChange={(e) => toggle_all(e.target.checked)}
+                  />
+                </TableCell>
 
-              <TableCell sx={{ fontWeight: 700 }}>Name</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Email</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Title</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Permission</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Status</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Name</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Email</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Title</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Permission</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Status</TableCell>
 
-              <TableCell align="right" sx={{ fontWeight: 700 }}>Edit</TableCell>
-              <TableCell align="right" sx={{ fontWeight: 700 }}>Actions</TableCell>
-            </TableRow>
-          </TableHead>
+                <TableCell align="right" sx={{ fontWeight: 700 }}>Edit</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700 }}>Actions</TableCell>
+              </TableRow>
+            </TableHead>
 
-          <TableBody>
-            {props.rows.map((row) => {
+            <TableBody>
+              {props.rows.map((row) => {
+                const id = String(row.user_id);
+                const is_selected = selected_set.has(id);
+
+                const target = { user_id: id, permission_role: row.permission_role };
+
+                const allow_update = can(me, "user:update", target);
+                const allow_delete = can(me, "user:delete", target);
+
+                return (
+                  <TableRow
+                    key={id}
+                    hover
+                    selected={is_selected}
+                    onClick={() => go_profile(row)}
+                    sx={{ cursor: "pointer" }}
+                  >
+                    <TableCell padding="checkbox" onClick={(e) => e.stopPropagation()}>
+                      <Checkbox checked={is_selected} onChange={() => toggle_one(id)} />
+                    </TableCell>
+
+                    <TableCell sx={{ fontWeight: 650 }}>{row.name}</TableCell>
+                    <TableCell sx={{ opacity: 0.85 }}>{row.email}</TableCell>
+                    <TableCell>{row.title_role}</TableCell>
+                    <TableCell sx={{ textTransform: "lowercase" }}>{row.permission_role}</TableCell>
+                    <TableCell>{render_status(row.status)}</TableCell>
+
+                    <TableCell align="right">
+                      {allow_update ? (
+                        <Tooltip title="Quick edit">
+                          <IconButton
+                            size="small"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              open_quick_edit(row);
+                            }}
+                          >
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      ) : (
+                        <Box sx={{ width: 40, height: 40 }} />
+                      )}
+                    </TableCell>
+
+                    <TableCell align="right">
+                      {allow_update || allow_delete ? (
+                        <Tooltip title="Actions">
+                          <IconButton size="small" onClick={(e) => open_menu(e, row)}>
+                            <MoreVertIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      ) : (
+                        <Box sx={{ width: 40, height: 40 }} />
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      ) : (
+        <Stack spacing={1.5}>
+          {selection_banner}
+          {props.rows.length === 0 ? (
+            <Paper
+              sx={{
+                p: 2,
+                textAlign: "center",
+                borderRadius: 3,
+                border: "1px solid rgba(255,255,255,0.08)",
+                backgroundColor: "rgba(255,255,255,0.03)",
+              }}
+            >
+              <Typography variant="body2" sx={{ opacity: 0.7 }}>
+                暂无用户
+              </Typography>
+            </Paper>
+          ) : (
+            props.rows.map((row) => {
               const id = String(row.user_id);
               const is_selected = selected_set.has(id);
-
               const target = { user_id: id, permission_role: row.permission_role };
-
               const allow_update = can(me, "user:update", target);
               const allow_delete = can(me, "user:delete", target);
 
               return (
-                <TableRow
+                <Paper
                   key={id}
-                  hover
-                  selected={is_selected}
                   onClick={() => go_profile(row)}
-                  sx={{ cursor: "pointer" }}
+                  sx={{
+                    p: 1.5,
+                    borderRadius: 3,
+                    border: is_selected
+                      ? "1px solid rgba(34,197,94,0.6)"
+                      : "1px solid rgba(255,255,255,0.08)",
+                    backgroundColor: "rgba(255,255,255,0.03)",
+                    cursor: "pointer",
+                  }}
                 >
-                  <TableCell padding="checkbox" onClick={(e) => e.stopPropagation()}>
-                    <Checkbox checked={is_selected} onChange={() => toggle_one(id)} />
-                  </TableCell>
-
-                  <TableCell sx={{ fontWeight: 650 }}>{row.name}</TableCell>
-                  <TableCell sx={{ opacity: 0.85 }}>{row.email}</TableCell>
-                  <TableCell>{row.title_role}</TableCell>
-                  <TableCell sx={{ textTransform: "lowercase" }}>{row.permission_role}</TableCell>
-                  <TableCell>{render_status(row.status)}</TableCell>
-
-                  {/* 只有有权限的用户才显示快速编辑按钮 */}
-                  <TableCell align="right">
-                    {allow_update ? (
-                      <Tooltip title="Quick edit">
-                        <IconButton
-                          size="small"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            open_quick_edit(row);
-                          }}
-                        >
-                          <EditIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                    ) : (
-                      <Box sx={{ width: 40, height: 40 }} /> // 占位保持对齐
-                    )}
-                  </TableCell>
-
-                  {/* 只有有删除或编辑权限的用户才显示Actions菜单 */}
-                  <TableCell align="right">
-                    {allow_update || allow_delete ? (
-                      <Tooltip title="Actions">
-                        <IconButton size="small" onClick={(e) => open_menu(e, row)}>
-                          <MoreVertIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                    ) : (
-                      <Box sx={{ width: 40, height: 40 }} /> // 占位保持对齐
-                    )}
-                  </TableCell>
-                </TableRow>
+                  <Stack spacing={1}>
+                    {/* 第一行：勾选 + 姓名邮箱 + 状态 + 操作按钮 */}
+                    <Stack
+                      direction="row"
+                      spacing={1.5}
+                      alignItems="flex-start"
+                      justifyContent="space-between"
+                      sx={{ gap: 1 }}
+                    >
+                      <Stack direction="row" spacing={1.5} alignItems="center" sx={{ minWidth: 0, flex: 1 }}>
+                        <Checkbox
+                          checked={is_selected}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={() => toggle_one(id)}
+                          sx={{ flexShrink: 0, p: 0.5 }}
+                        />
+                        <Box sx={{ minWidth: 0, flex: 1 }}>
+                          <Typography sx={{ fontWeight: 700, fontSize: "0.95rem" }} noWrap>
+                            {row.name}
+                          </Typography>
+                          <Typography sx={{ opacity: 0.75, fontSize: "0.8rem" }} noWrap>
+                            {row.email}
+                          </Typography>
+                        </Box>
+                      </Stack>
+                      <Stack direction="row" spacing={0.25} alignItems="center" sx={{ flexShrink: 0 }}>
+                        {render_status(row.status)}
+                        {allow_update && (
+                          <Tooltip title="Quick edit">
+                            <IconButton
+                              size="small"
+                              sx={{ p: 0.5 }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                open_quick_edit(row);
+                              }}
+                            >
+                              <EditIcon sx={{ fontSize: 18 }} />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                        {(allow_update || allow_delete) && (
+                          <Tooltip title="Actions">
+                            <IconButton size="small" sx={{ p: 0.5 }} onClick={(e) => open_menu(e, row)}>
+                              <MoreVertIcon sx={{ fontSize: 18 }} />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                      </Stack>
+                    </Stack>
+                    {/* 第二行：角色标签（与姓名左对齐） */}
+                    <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap sx={{ pl: 5.5 }}>
+                      {row.title_role ? (
+                        <Chip label={row.title_role} size="small" sx={{ height: 22, fontSize: "0.7rem" }} />
+                      ) : null}
+                      <Chip label={row.permission_role} size="small" sx={{ height: 22, fontSize: "0.7rem" }} />
+                      {row.company ? (
+                        <Chip label={row.company} size="small" sx={{ height: 22, fontSize: "0.7rem" }} />
+                      ) : null}
+                    </Stack>
+                  </Stack>
+                </Paper>
               );
-            })}
-          </TableBody>
-        </Table>
-      </TableContainer>
-
+            })
+          )}
+        </Stack>
+      )}
       <Menu
         anchorEl={menu_anchor}
         open={Boolean(menu_anchor)}

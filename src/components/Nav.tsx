@@ -26,7 +26,7 @@ import PeopleIcon from "@mui/icons-material/People";
 import BusinessIcon from "@mui/icons-material/Business";
 import DashboardIcon from "@mui/icons-material/Dashboard";
 
-// 新增：dashboard 这些条目的图标
+// dashboard 等条目的图标
 import ShoppingBagOutlinedIcon from "@mui/icons-material/ShoppingBagOutlined";
 import AnalyticsOutlinedIcon from "@mui/icons-material/AnalyticsOutlined";
 import AccountBalanceOutlinedIcon from "@mui/icons-material/AccountBalanceOutlined";
@@ -39,7 +39,7 @@ type NavLeaf = {
   label: string;
   href: string;
   match?: "exact" | "prefix";
-  icon?: React.ReactNode; // ✅ 新增：叶子节点也可有 icon
+  icon?: React.ReactNode; // 叶子也能有图标
 };
 
 type NavParent = {
@@ -55,6 +55,12 @@ type NavSection = {
   items: (NavLeaf | NavParent)[];
 };
 
+type NavProps = {
+  variant?: "permanent" | "temporary";
+  open?: boolean;
+  onClose?: () => void;
+};
+
 const drawer_width_open = 260;
 const drawer_width_closed = 72;
 
@@ -65,7 +71,7 @@ const nav_sections: NavSection[] = [
     items: [
       { key: "dashboard", label: "Dashboard", href: "/", match: "exact", icon: <DashboardIcon /> },
 
-      // 下面这些就是你截图那种“多加几个条目”
+      // 这几个是示例条目
       { key: "ecommerce", label: "Ecommerce", href: "/ecommerce", match: "prefix", icon: <ShoppingBagOutlinedIcon /> },
       { key: "analytics", label: "Analytics", href: "/analytics", match: "prefix", icon: <AnalyticsOutlinedIcon /> },
       { key: "banking", label: "Banking", href: "/banking", match: "prefix", icon: <AccountBalanceOutlinedIcon /> },
@@ -96,7 +102,9 @@ const nav_sections: NavSection[] = [
         label: "Company",
         icon: <BusinessIcon />,
         children: [
-          { key: "company-list", label: "List", href: "/companies", match: "exact" },
+          { key: "company-list", label: "List", href: "/companies/list", match: "exact" },
+          { key: "company-create", label: "Create", href: "/companies/create", match: "prefix" },
+          { key: "company-edit", label: "Edit", href: "/companies/edit", match: "prefix" },
           { key: "company-details", label: "Details", href: "/companies/details", match: "prefix" },
         ],
       },
@@ -118,8 +126,9 @@ function is_parent_item(item: NavLeaf | NavParent): item is NavParent {
   return (item as NavParent).children !== undefined;
 }
 
-export default function Nav() {
+export default function Nav({ variant = "permanent", open, onClose }: NavProps = {}) {
   const pathname = usePathname();
+  const is_temporary = variant === "temporary";
 
   const [drawer_open, set_drawer_open] = React.useState(true);
   const [parent_open_map, set_parent_open_map] = React.useState<Record<string, boolean>>({});
@@ -137,22 +146,41 @@ export default function Nav() {
       }
     }
     set_parent_open_map((prev) => ({ ...initial, ...prev }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname]);
 
-  const toggle_drawer = () => set_drawer_open((v) => !v);
+  const toggle_drawer = () => {
+    if (is_temporary) {
+      onClose?.();
+      return;
+    }
+    set_drawer_open((v) => !v);
+  };
 
   const toggle_parent = (parent_key: string) => {
     set_parent_open_map((prev) => ({ ...prev, [parent_key]: !prev[parent_key] }));
   };
 
-  const current_width = drawer_open ? drawer_width_open : drawer_width_closed;
+  const drawer_is_expanded = is_temporary ? true : drawer_open;
+  const current_width = is_temporary
+    ? drawer_width_open
+    : drawer_is_expanded
+      ? drawer_width_open
+      : drawer_width_closed;
+  const container_width = is_temporary ? 0 : current_width;
+  const handleNavigate = () => {
+    if (is_temporary) {
+      onClose?.();
+    }
+  };
 
   return (
     <Drawer
-      variant="permanent"
+      variant={is_temporary ? "temporary" : "permanent"}
+      open={is_temporary ? open : true}
+      onClose={is_temporary ? onClose : undefined}
+      ModalProps={is_temporary ? { keepMounted: true } : undefined}
       sx={{
-        width: current_width,
+        width: container_width,
         flexShrink: 0,
         "& .MuiDrawer-paper": {
           width: current_width,
@@ -172,13 +200,13 @@ export default function Nav() {
         sx={{
           display: "flex",
           alignItems: "center",
-          justifyContent: drawer_open ? "space-between" : "center",
-          px: drawer_open ? 2 : 0,
+          justifyContent: drawer_is_expanded ? "space-between" : "center",
+          px: drawer_is_expanded ? 2 : 0,
           py: 1.5,
           minHeight: 64,
         }}
       >
-        {drawer_open ? (
+        {drawer_is_expanded ? (
           <Box>
             <Typography fontWeight={800}>Team 1</Typography>
             <Typography variant="caption" sx={{ opacity: 0.7 }}>
@@ -192,20 +220,20 @@ export default function Nav() {
         )}
 
         <IconButton onClick={toggle_drawer} size="small" aria-label="toggle sidebar">
-          {drawer_open ? <ChevronLeftIcon /> : <ChevronRightIcon />}
+          {drawer_is_expanded ? <ChevronLeftIcon /> : <ChevronRightIcon />}
         </IconButton>
       </Box>
 
       <Divider />
 
-      <List sx={{ px: drawer_open ? 1 : 0.5, py: 1 }}>
+      <List sx={{ px: drawer_is_expanded ? 1 : 0.5, py: 1 }}>
         {nav_sections.map((section) => (
           <Box key={section.key} sx={{ mb: 1 }}>
             {section.label ? (
               <Typography
                 variant="caption"
                 sx={{
-                  px: drawer_open ? 2 : 1,
+                  px: drawer_is_expanded ? 2 : 1,
                   py: 1,
                   fontWeight: 800,
                   letterSpacing: 0.6,
@@ -213,7 +241,7 @@ export default function Nav() {
                   opacity: 0.7,
                 }}
               >
-                {drawer_open ? section.label : ""}
+                {drawer_is_expanded ? section.label : ""}
               </Typography>
             ) : null}
 
@@ -227,30 +255,31 @@ export default function Nav() {
                     selected={active}
                     sx={{
                       borderRadius: 2,
-                      mx: drawer_open ? 1 : 0.5,
+                      mx: drawer_is_expanded ? 1 : 0.5,
                       mb: 0.5,
-                      justifyContent: drawer_open ? "flex-start" : "center",
+                      justifyContent: drawer_is_expanded ? "flex-start" : "center",
                     }}
                   >
                     <ListItemIcon
                       sx={{
-                        minWidth: drawer_open ? 42 : "auto",
+                        minWidth: drawer_is_expanded ? 42 : "auto",
                         justifyContent: "center",
                       }}
                     >
-                      {/* ✅ 不再写死 DashboardIcon，而是用 item.icon */}
+                      {/* 用 item.icon 动态渲染 */}
                       {item.icon ?? <DashboardIcon />}
                     </ListItemIcon>
-                    {drawer_open ? <ListItemText primary={item.label} /> : null}
+                    {drawer_is_expanded ? <ListItemText primary={item.label} /> : null}
                   </ListItemButton>
                 );
 
-                return drawer_open ? (
+                return drawer_is_expanded ? (
                   <Box
                     key={item.key}
                     component={Link}
                     href={item.href}
                     sx={{ textDecoration: "none", color: "inherit" }}
+                    onClick={handleNavigate}
                   >
                     {row}
                   </Box>
@@ -260,6 +289,7 @@ export default function Nav() {
                       component={Link}
                       href={item.href}
                       sx={{ textDecoration: "none", color: "inherit" }}
+                      onClick={handleNavigate}
                     >
                       {row}
                     </Box>
@@ -280,35 +310,35 @@ export default function Nav() {
                     selected={parent_active}
                     sx={{
                       borderRadius: 2,
-                      mx: drawer_open ? 1 : 0.5,
-                      justifyContent: drawer_open ? "space-between" : "center",
+                      mx: drawer_is_expanded ? 1 : 0.5,
+                      justifyContent: drawer_is_expanded ? "space-between" : "center",
                     }}
                   >
                     <Box sx={{ display: "flex", alignItems: "center" }}>
                       <ListItemIcon
                         sx={{
-                          minWidth: drawer_open ? 42 : "auto",
+                          minWidth: drawer_is_expanded ? 42 : "auto",
                           justifyContent: "center",
                         }}
                       >
                         {item.icon}
                       </ListItemIcon>
 
-                      {drawer_open ? <ListItemText primary={item.label} /> : null}
+                      {drawer_is_expanded ? <ListItemText primary={item.label} /> : null}
                     </Box>
 
-                    {drawer_open ? (parent_open ? <ExpandLessIcon /> : <ExpandMoreIcon />) : null}
+                    {drawer_is_expanded ? (parent_open ? <ExpandLessIcon /> : <ExpandMoreIcon />) : null}
                   </ListItemButton>
 
                   {/* 子菜单 */}
-                  <Collapse in={drawer_open ? parent_open : true} timeout="auto" unmountOnExit>
+                  <Collapse in={drawer_is_expanded ? parent_open : true} timeout="auto" unmountOnExit>
                     <Box
                       sx={{
                         position: "relative",
-                        ml: drawer_open ? 3.25 : 0,
+                        ml: drawer_is_expanded ? 3.25 : 0,
                         mt: 0.5,
                         mb: 0.5,
-                        "&:before": drawer_open
+                        "&:before": drawer_is_expanded
                           ? {
                               content: '""',
                               position: "absolute",
@@ -331,22 +361,23 @@ export default function Nav() {
                               selected={child_active}
                               sx={{
                                 borderRadius: 2,
-                                mx: drawer_open ? 1 : 0.5,
+                                mx: drawer_is_expanded ? 1 : 0.5,
                                 mb: 0.25,
-                                pl: drawer_open ? 4 : 1.25,
-                                justifyContent: drawer_open ? "flex-start" : "center",
+                                pl: drawer_is_expanded ? 4 : 1.25,
+                                justifyContent: drawer_is_expanded ? "flex-start" : "center",
                               }}
                             >
-                              {drawer_open ? <ListItemText primary={child.label} /> : null}
+                              {drawer_is_expanded ? <ListItemText primary={child.label} /> : null}
                             </ListItemButton>
                           );
 
-                          return drawer_open ? (
+                          return drawer_is_expanded ? (
                             <Box
                               key={child.key}
                               component={Link}
                               href={child.href}
                               sx={{ textDecoration: "none", color: "inherit" }}
+                              onClick={handleNavigate}
                             >
                               {child_row}
                             </Box>
@@ -360,6 +391,7 @@ export default function Nav() {
                                 component={Link}
                                 href={child.href}
                                 sx={{ textDecoration: "none", color: "inherit" }}
+                                onClick={handleNavigate}
                               >
                                 <ListItemButton
                                   selected={child_active}

@@ -2,62 +2,58 @@
 
 import * as React from "react";
 import { Box, Card, CardContent, Stack, Typography } from "@mui/material";
-import Grid from "@mui/material/Grid"; // ✅ v6 新 Grid（Grid v2）
-import { companies } from "@/data/dummy";
+import Grid from "@mui/material/Grid"; // v6 Grid
 import LevelDonut from "@/components/dashboard/LevelDonut";
 import CumulativeLine from "@/components/dashboard/CumulativeLine";
 import KpiCard from "@/components/dashboard/KpiCard";
 import CompanyBarChart from "@/components/dashboard/CompanyBarChart";
+import { companiesService } from "@/services/companies.service";
 
 
-function format_compact_number(n: number) {
+function format_compact_number(n: number | null | undefined): string {
+  // 空值、NaN 直接返回 0
+  if (n == null || isNaN(n) || !isFinite(n) || n === 0) {
+    return "0";
+  }
+  
   const abs = Math.abs(n);
-  if (abs >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(2)}B`;
-  if (abs >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
-  if (abs >= 1_000) return `${(n / 1_000).toFixed(2)}K`;
+  
+  // 万亿
+  if (abs >= 1_000_000_000_000) {
+    return `${(n / 1_000_000_000_000).toFixed(2)}T`;
+  }
+  // 十亿
+  if (abs >= 1_000_000_000) {
+    return `${(n / 1_000_000_000).toFixed(2)}B`;
+  }
+  // 百万
+  if (abs >= 1_000_000) {
+    return `${(n / 1_000_000).toFixed(2)}M`;
+  }
+  // 千
+  if (abs >= 1_000) {
+    return `${(n / 1_000).toFixed(2)}K`;
+  }
+  // 小于 1000 直接取整
   return String(Math.round(n));
 }
 
-type kpi_kind = "company_count" | "employees" | "revenue" | "countries";
 type delta_kind = "up" | "down" | "flat";
 
-function calc_year_series(
-  data: { joined_year: number; employees: number; annual_revenue: number; country: string }[],
-  start_year: number,
-  end_year: number,
-  kind: kpi_kind
-) {
-  const added_by_year = new Map<number, typeof data>();
-  for (let y = start_year; y <= end_year; y++) added_by_year.set(y, []);
+type DashboardStatsResponse = {
+  company_count?: number | string;
+  employees_sum?: number | string;
+  employees?: number | string;
+  revenue_sum?: number | string;
+  total_revenue?: number | string;
+  countries_covered?: number | string;
+  company_series?: number[];
+  employees_series?: number[];
+  revenue_series?: number[];
+  countries_series?: number[];
+};
 
-  for (const c of data) {
-    if (c.joined_year < start_year || c.joined_year > end_year) continue;
-    added_by_year.get(c.joined_year)!.push(c);
-  }
-
-  let cum_companies = 0;
-  let cum_employees = 0;
-  let cum_revenue = 0;
-  const country_set = new Set<string>();
-
-  const series: number[] = [];
-
-  for (let y = start_year; y <= end_year; y++) {
-    const added = added_by_year.get(y)!;
-    for (const c of added) {
-      cum_companies += 1;
-      cum_employees += c.employees;
-      cum_revenue += c.annual_revenue;
-      country_set.add(c.country);
-    }
-    if (kind === "company_count") series.push(cum_companies);
-    if (kind === "employees") series.push(cum_employees);
-    if (kind === "revenue") series.push(cum_revenue);
-    if (kind === "countries") series.push(country_set.size);
-  }
-
-  return series;
-}
+// 数据已从 API 拉，这个函数保留做备用
 
 function calc_delta_from_series(series: number[]): { kind: delta_kind; label: string } {
   if (!series.length) return { kind: "flat", label: "0.0%" };
@@ -83,18 +79,102 @@ function spark_from_series(series: number[], points = 10) {
 }
 
 export default function Dashboard() {
-  const company_count = companies.length;
-  const employees_sum = companies.reduce((acc, c) => acc + c.employees, 0);
-  const revenue_sum = companies.reduce((acc, c) => acc + c.annual_revenue, 0);
-  const countries_covered = new Set(companies.map((c) => c.country)).size;
+  const [stats, setStats] = React.useState<DashboardStatsResponse | null>(null);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<Error | null>(null);
 
+  // 结束年用当前年，把最新数据算进去
+  const currentYear = new Date().getFullYear();
   const start_year = 2010;
-  const end_year = 2024;
+  const end_year = currentYear;
 
-  const company_series = calc_year_series(companies, start_year, end_year, "company_count");
-  const employees_series = calc_year_series(companies, start_year, end_year, "employees");
-  const revenue_series = calc_year_series(companies, start_year, end_year, "revenue");
-  const countries_series = calc_year_series(companies, start_year, end_year, "countries");
+  React.useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const data = await companiesService.getDashboardStats();
+        
+        // 调试输出
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[Dashboard] 接收到的统计数据:', data);
+          console.log('[Dashboard] employees_sum 类型:', typeof data.employees_sum, '值:', data.employees_sum);
+          console.log('[Dashboard] revenue_sum 类型:', typeof data.revenue_sum, '值:', data.revenue_sum);
+        }
+        
+        setStats(data);
+      } catch (err) {
+        console.error('获取 dashboard 统计数据失败:', err);
+        setError(err instanceof Error ? err : new Error('获取统计数据失败'));
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchStats();
+  }, []);
+
+  if (loading) {
+    return (
+      <Box sx={{ width: "100%", minWidth: 0, py: 4, textAlign: "center" }}>
+        <Typography variant="body2" sx={{ opacity: 0.7 }}>
+          加载中...
+        </Typography>
+      </Box>
+    );
+  }
+
+  if (error || !stats) {
+    return (
+      <Box sx={{ width: "100%", minWidth: 0, py: 4, textAlign: "center" }}>
+        <Typography variant="body2" sx={{ color: "error.main" }}>
+          加载失败: {error?.message || '未知错误'}
+        </Typography>
+      </Box>
+    );
+  }
+
+  const toNumber = (value: unknown): number => {
+    if (typeof value === "number") {
+      return Number.isFinite(value) ? value : 0;
+    }
+    if (typeof value === "string") {
+      const parsed = Number.parseFloat(value);
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
+    return 0;
+  };
+
+  const employees_sum_raw = stats.employees_sum ?? stats.employees ?? 0;
+  const revenue_sum_raw = stats.revenue_sum ?? stats.total_revenue ?? 0;
+  const company_count = toNumber(stats.company_count);
+  const countries_covered = toNumber(stats.countries_covered);
+  const company_series = Array.isArray(stats.company_series) ? stats.company_series : [];
+  const employees_series = Array.isArray(stats.employees_series) ? stats.employees_series : [];
+  const revenue_series = Array.isArray(stats.revenue_series) ? stats.revenue_series : [];
+  const countries_series = Array.isArray(stats.countries_series) ? stats.countries_series : [];
+
+  // 统一转成数字，支持字符串
+  const safe_employees_sum = toNumber(employees_sum_raw);
+  const safe_revenue_sum = toNumber(revenue_sum_raw);
+  
+  // series 里的值也转数字
+  const safe_employees_series = Array.isArray(employees_series) 
+    ? employees_series.map(toNumber).filter(n => n >= 0)
+    : [];
+  const safe_revenue_series = Array.isArray(revenue_series)
+    ? revenue_series.map(toNumber).filter(n => n >= 0)
+    : [];
+
+  // 调试输出
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[Dashboard] 转换后的值:', {
+      employees_sum: safe_employees_sum,
+      revenue_sum: safe_revenue_sum,
+      employees_series_length: safe_employees_series.length,
+      revenue_series_length: safe_revenue_series.length,
+    });
+  }
 
   return (
     <Box sx={{ width: "100%", minWidth: 0 }}>
@@ -113,18 +193,18 @@ export default function Dashboard() {
           <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
             <KpiCard
               title="employees"
-              value={format_compact_number(employees_sum)}
-              delta={calc_delta_from_series(employees_series)}
-              series={spark_from_series(employees_series, 10)}
+              value={format_compact_number(safe_employees_sum)}
+              delta={calc_delta_from_series(safe_employees_series)}
+              series={spark_from_series(safe_employees_series, 10)}
             />
           </Grid>
 
           <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
             <KpiCard
               title="total revenue"
-              value={`$${format_compact_number(revenue_sum)}`}
-              delta={calc_delta_from_series(revenue_series)}
-              series={spark_from_series(revenue_series, 10)}
+              value={`$${format_compact_number(safe_revenue_sum)}`}
+              delta={calc_delta_from_series(safe_revenue_series)}
+              series={spark_from_series(safe_revenue_series, 10)}
             />
           </Grid>
 
@@ -144,14 +224,23 @@ export default function Dashboard() {
             <Card
               sx={{
                 width: "100%",
-                height: { xs: 620, md: 660 },
+                height: "100%",
+                minHeight: { xs: 420, md: 560 },
                 borderRadius: 4,
                 background: "rgba(255,255,255,0.03)",
                 border: "1px solid rgba(255,255,255,0.08)",
                 backdropFilter: "blur(10px)",
               }}
             >
-              <CardContent sx={{ height: "100%", display: "flex", flexDirection: "column", p: 2.5 }}>
+              <CardContent
+                sx={{
+                  height: "100%",
+                  display: "flex",
+                  flexDirection: "column",
+                  p: { xs: 2, md: 2.5 },
+                  gap: 1,
+                }}
+              >
                 <Box sx={{ mb: 1.5 }}>
                   <Typography variant="h5" sx={{ fontWeight: 900 }}>
                     Current companies
@@ -161,8 +250,8 @@ export default function Dashboard() {
                   </Typography>
                 </Box>
 
-                <Box sx={{ flex: 1, minHeight: 0, minWidth: 0 }}>
-                  <LevelDonut companies={companies} />
+                <Box sx={{ flex: 1, minHeight: { xs: 280, md: 360 }, minWidth: 0 }}>
+                  <LevelDonut />
                 </Box>
               </CardContent>
             </Card>
@@ -172,14 +261,23 @@ export default function Dashboard() {
             <Card
               sx={{
                 width: "100%",
-                height: { xs: 620, md: 660 },
+                height: "100%",
+                minHeight: { xs: 420, md: 560 },
                 borderRadius: 4,
                 background: "rgba(255,255,255,0.03)",
                 border: "1px solid rgba(255,255,255,0.08)",
                 backdropFilter: "blur(10px)",
               }}
             >
-              <CardContent sx={{ height: "100%", display: "flex", flexDirection: "column", p: 2.5 }}>
+              <CardContent
+                sx={{
+                  height: "100%",
+                  display: "flex",
+                  flexDirection: "column",
+                  p: { xs: 2, md: 2.5 },
+                  gap: 1,
+                }}
+              >
                 <Box sx={{ mb: 1.5 }}>
                   <Typography variant="h5" sx={{ fontWeight: 900 }}>
                     Network growth
@@ -189,8 +287,8 @@ export default function Dashboard() {
                   </Typography>
                 </Box>
 
-                <Box sx={{ flex: 1, minHeight: 0, minWidth: 0 }}>
-                  <CumulativeLine companies={companies} start_year={start_year} end_year={end_year} />
+                <Box sx={{ flex: 1, minHeight: { xs: 280, md: 360 }, minWidth: 0 }}>
+                  <CumulativeLine start_year={start_year} end_year={end_year} />
                 </Box>
               </CardContent>
             </Card>
@@ -199,7 +297,7 @@ export default function Dashboard() {
         {/* dynamic bar chart (new week) */}
         <Grid container spacing={3} sx={{ minWidth: 0 }}>
           <Grid size={{ xs: 12 }} sx={{ minWidth: 0 }}>
-            <CompanyBarChart companies={companies} />
+            <CompanyBarChart />
           </Grid>
         </Grid>
       </Stack>

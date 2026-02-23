@@ -9,12 +9,10 @@ import {
   Card,
   CardContent,
   Divider,
-  FormControl,
   FormControlLabel,
   Grid,
   IconButton,
   MenuItem,
-  Select,
   Snackbar,
   Stack,
   Switch,
@@ -31,10 +29,11 @@ import LinkIcon from "@mui/icons-material/Link";
 import SecurityIcon from "@mui/icons-material/Security";
 import SettingsIcon from "@mui/icons-material/Settings";
 
-import { use_auth } from "@/auth/auth.context";
+import { useAuth } from "@/auth/auth.context";
 import type { me_user } from "@/auth/auth.types";
 import { uploadService } from "@/services/upload.service";
 import { usersService } from "@/services/users.service";
+import { getErrorMessage } from "@/lib/error-utils";
 
 type account_tab = "general" | "billing" | "notifications" | "social" | "security";
 
@@ -54,25 +53,25 @@ function country_label(code: me_user["country_code"]) {
 }
 
 export default function Page() {
-  const { me, patch_me } = use_auth();
+  const { me, patch_me } = useAuth();
 
   const [tab, set_tab] = React.useState<account_tab>("general");
 
-  // 本地编辑缓冲
+  // 编辑中的值
   const [value, set_value] = React.useState<me_user>(me);
   const [saving, set_saving] = React.useState(false);
 
-  // toast/snackbar
+  // 提示条
   const [toast, set_toast] = React.useState<{
     open: boolean;
     severity: "success" | "error" | "warning";
     message: string;
   }>({ open: false, severity: "success", message: "" });
 
-  // 表单错误
+  // 校验错误
   const [errors, set_errors] = React.useState<{ phone?: string; email?: string }>({});
 
-  // 头像上传相关
+  // 头像上传
   const [uploading, set_uploading] = React.useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -104,7 +103,7 @@ export default function Page() {
 
     set_saving(true);
     try {
-      // 调用后端 API 更新用户信息
+      // 调 API 更新
       await usersService.update(me.user_id, {
         name: value.name,
         email: value.email,
@@ -117,7 +116,7 @@ export default function Page() {
         avatar_url: value.avatar_url,
       });
 
-      // 更新本地状态
+      // 同步到本地
       await patch_me({
         name: value.name,
         email: value.email,
@@ -133,10 +132,13 @@ export default function Page() {
       });
 
       set_toast({ open: true, severity: "success", message: "Saved successfully." });
-    } catch (e: any) {
-      console.error(e);
-      const errorMessage = e?.message || "Save failed. Check console for details.";
-      set_toast({ open: true, severity: "error", message: errorMessage });
+    } catch (error) {
+      console.error(error);
+      set_toast({
+        open: true,
+        severity: "error",
+        message: getErrorMessage(error, "Save failed. Check console for details."),
+      });
     } finally {
       set_saving(false);
     }
@@ -225,13 +227,13 @@ export default function Page() {
                         const file = e.target.files?.[0];
                         if (!file) return;
 
-                        // 验证文件大小（3MB）
+                        // 限制 3MB
                         if (file.size > 3 * 1024 * 1024) {
                           set_toast({ open: true, severity: "error", message: "文件大小不能超过 3MB" });
                           return;
                         }
 
-                        // 验证文件类型
+                        // 只允许图片
                         const validTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif"];
                         if (!validTypes.includes(file.type)) {
                           set_toast({ open: true, severity: "error", message: "只支持 jpeg, jpg, png, gif 格式的图片" });
@@ -243,9 +245,13 @@ export default function Page() {
                           const avatarUrl = await uploadService.uploadAvatar(file);
                           update("avatar_url", avatarUrl);
                           set_toast({ open: true, severity: "success", message: "头像上传成功" });
-                        } catch (error: any) {
+                        } catch (error) {
                           console.error("上传头像失败:", error);
-                          set_toast({ open: true, severity: "error", message: error?.message || "上传头像失败，请重试" });
+                          set_toast({
+                            open: true,
+                            severity: "error",
+                            message: getErrorMessage(error, "上传头像失败，请重试"),
+                          });
                         } finally {
                           set_uploading(false);
                           if (fileInputRef.current) {
@@ -342,20 +348,18 @@ export default function Page() {
                   </Grid>
 
                   <Grid item xs={12} md={6}>
-                    <FormControl fullWidth>
-                      <Typography variant="caption" sx={{ opacity: 0.7, mb: 0.5 }}>
-                        Country
-                      </Typography>
-                      <Select
-                        value={value.country_code}
-                        onChange={(e) => update("country_code", e.target.value as me_user["country_code"])}
-                      >
-                        <MenuItem value="ca">{country_label("ca")}</MenuItem>
-                        <MenuItem value="us">{country_label("us")}</MenuItem>
-                        <MenuItem value="uk">{country_label("uk")}</MenuItem>
-                        <MenuItem value="cn">{country_label("cn")}</MenuItem>
-                      </Select>
-                    </FormControl>
+                    <TextField
+                      select
+                      label="Country"
+                      fullWidth
+                      value={value.country_code}
+                      onChange={(e) => update("country_code", e.target.value as me_user["country_code"])}
+                    >
+                      <MenuItem value="ca">{country_label("ca")}</MenuItem>
+                      <MenuItem value="us">{country_label("us")}</MenuItem>
+                      <MenuItem value="uk">{country_label("uk")}</MenuItem>
+                      <MenuItem value="cn">{country_label("cn")}</MenuItem>
+                    </TextField>
                   </Grid>
 
                   <Grid item xs={12} md={6}>
@@ -420,7 +424,7 @@ export default function Page() {
         </Card>
       )}
 
-      {/* ✅ toast */}
+      {/* 提示条 */}
       <Snackbar
         open={toast.open}
         autoHideDuration={1800}

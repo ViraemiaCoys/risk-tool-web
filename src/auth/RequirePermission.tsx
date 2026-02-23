@@ -3,15 +3,15 @@
 import * as React from "react";
 import { Box, Card, CardContent, Typography, Button } from "@mui/material";
 import { useRouter } from "next/navigation";
-import { use_auth } from "@/auth/auth.context";
-import { can, type rbac_action, type user_target } from "@/auth/rbac";
+import { useAuth } from "@/auth/auth.context";
+import { can, type rbac_action, type user_target, type company_target } from "@/auth/rbac";
 
 export default function RequirePermission(props: {
   action: rbac_action;
-  target?: user_target;
+  target?: user_target | company_target;
   children: React.ReactNode;
 }) {
-  const { me } = use_auth();
+  const { me } = useAuth();
   const router = useRouter();
 
   const allowed = React.useMemo(() => can(me, props.action, props.target), [me, props.action, props.target]);

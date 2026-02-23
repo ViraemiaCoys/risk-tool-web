@@ -4,18 +4,19 @@ import * as React from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Box, Button, Card, CardContent, Typography } from "@mui/material";
 
-import { use_auth } from "@/auth/auth.context";
+import { useAuth } from "@/auth/auth.context";
 import { can } from "@/auth/rbac";
 import { useUser } from "@/hooks/use-users";
 import { usersService } from "@/services/users.service";
+import { getErrorMessage } from "@/lib/error-utils";
 
-// 你自己的表单组件
+// 用户表单
 import UserForm, { type user_form_value } from "@/components/users/UserForm";
 
 export default function UsersEditPage() {
   const params = useParams<{ user_id: string }>();
   const router = useRouter();
-  const { me } = use_auth();
+  const { me } = useAuth();
 
   const user_id = params.user_id;
   const { user: target_user, loading, error } = useUser(user_id);
@@ -100,7 +101,7 @@ export default function UsersEditPage() {
           permission_role: target_user.permission_role,
           status: target_user.status,
           email_verified: target_user.email_verified ?? true,
-          avatar_url: (target_user as any).avatar_url || "",
+          avatar_url: target_user.avatar_url || "",
         }}
         show_permission_role={allowed_change_role || me.role === "admin"}
         allow_edit_permission_role={allowed_change_role}
@@ -123,10 +124,9 @@ export default function UsersEditPage() {
               avatar_url: value.avatar_url || undefined,
             });
             router.push("/users");
-          } catch (error: any) {
+          } catch (error) {
             console.error("更新用户失败:", error);
-            const errorMessage = error?.message || "更新用户失败，请重试";
-            alert(errorMessage);
+            alert(getErrorMessage(error, "更新用户失败，请重试"));
           }
         }}
         on_cancel={() => router.push("/users")}

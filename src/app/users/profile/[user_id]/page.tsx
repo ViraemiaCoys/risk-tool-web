@@ -4,9 +4,10 @@ import * as React from "react";
 import { useParams } from "next/navigation";
 import { useUser } from "@/hooks/use-users";
 import { uploadService } from "@/services/upload.service";
-import { usersService } from "@/services/users.service";
+import { usersService, type UserEntity } from "@/services/users.service";
 import { postsService, type PostEntity } from "@/services/posts.service";
-import { use_auth } from "@/auth/auth.context";
+import { useAuth } from "@/auth/auth.context";
+import { getErrorMessage } from "@/lib/error-utils";
 
 import {
   Avatar,
@@ -127,7 +128,7 @@ function StatCard(props: { follower: string; following: string }) {
   );
 }
 
-function AboutCard(props: { user: any }) {
+function AboutCard(props: { user: UserEntity }) {
   const { user } = props;
 
   const location = React.useMemo(() => {
@@ -205,9 +206,9 @@ function ComposerCard(props: { user_id: string; onPost?: () => void }) {
       });
       set_content("");
       props.onPost?.(); // 刷新帖子列表
-    } catch (error: any) {
+    } catch (error) {
       console.error("发布失败:", error);
-      alert(error?.message || "发布失败，请重试");
+      alert(getErrorMessage(error, "发布失败，请重试"));
     } finally {
       set_posting(false);
     }
@@ -318,7 +319,7 @@ function FeedPostCard(props: { post: post_item }) {
 }
 
 function ProfileHeader(props: {
-  user: any;
+  user: UserEntity;
   tab: profile_tab_key;
   on_tab_change: (v: profile_tab_key) => void;
   on_cover_update?: (url: string) => void;
@@ -331,13 +332,13 @@ function ProfileHeader(props: {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // 验证文件大小（5MB）
+    // 限制 5MB
     if (file.size > 5 * 1024 * 1024) {
       alert("文件大小不能超过 5MB");
       return;
     }
 
-    // 验证文件类型
+    // 只允许图片
     const validTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif"];
     if (!validTypes.includes(file.type)) {
       alert("只支持 jpeg, jpg, png, gif 格式的图片");
@@ -348,9 +349,9 @@ function ProfileHeader(props: {
     try {
       const coverUrl = await uploadService.uploadCover(file);
       on_cover_update?.(coverUrl);
-    } catch (error: any) {
+    } catch (error) {
       console.error("上传封面失败:", error);
-      alert(error?.message || "上传封面失败，请重试");
+      alert(getErrorMessage(error, "上传封面失败，请重试"));
     } finally {
       set_uploading(false);
       if (coverInputRef.current) {
@@ -578,32 +579,31 @@ export default function Page() {
   const params = useParams<{ user_id: string }>();
   const user_id = params.user_id;
   const { user, loading, error } = useUser(user_id);
-  const { me } = use_auth();
+  const { me } = useAuth();
 
   const [tab, set_tab] = React.useState<profile_tab_key>("profile");
-  const [localUser, set_localUser] = React.useState<any>(null);
+  const [localUser, set_localUser] = React.useState<UserEntity | null>(null);
   const [posts, set_posts] = React.useState<PostEntity[]>([]);
   const [loadingPosts, set_loadingPosts] = React.useState(false);
 
-  // 检查是否是当前用户（可以编辑）
-  // 注意：如果 me.user_id 格式不匹配（如 u_demo_001 vs u-0001），需要调整判断逻辑
+  // 判断是否当前用户（能编辑）
   const isCurrentUser = React.useMemo(() => {
     if (!me || !user_id) return false;
-    // 支持两种格式匹配
+    // user_id 格式可能不一致，去掉 - 和 _ 再比
     return me.user_id === user_id || me.user_id?.replace(/[_-]/g, '') === user_id?.replace(/[_-]/g, '');
   }, [me, user_id]);
   
-  // 临时：允许所有用户发帖（开发阶段）
-  const canPost = true; // 或者改为 isCurrentUser
+  // 开发阶段所有人能发帖，上线可改 isCurrentUser
+  const canPost = true;
 
   React.useEffect(() => {
     if (user) {
       set_localUser({
         ...user,
-        cover_url: (user as any).cover_url || "",
-        followers: (user as any).followers || "0",
-        following: (user as any).following || "0",
-        about: (user as any).about || "",
+        cover_url: user.cover_url ?? "",
+        followers: user.followers ?? "0",
+        following: user.following ?? "0",
+        about: user.about ?? "",
       });
     }
   }, [user]);
@@ -615,9 +615,9 @@ export default function Page() {
     try {
       const data = await postsService.getByUserId(user_id);
       set_posts(data || []);
-    } catch (error: any) {
+    } catch (error) {
       console.error("加载帖子失败:", error);
-      // 如果 API 不存在或出错，设置为空数组
+      // API 出错就设空
       set_posts([]);
     } finally {
       set_loadingPosts(false);
@@ -640,7 +640,7 @@ export default function Page() {
     }
   };
 
-  // 转换帖子数据格式 - 必须在所有条件返回之前调用，遵守 React Hooks 规则
+  // 转成展示用的帖子格式
   const displayPosts: post_item[] = React.useMemo(() => {
     if (!localUser) return [];
     return (posts || []).map((post) => ({
@@ -686,7 +686,7 @@ export default function Page() {
         width: "100%",
         maxWidth: "none",
         minWidth: 0,
-        px: { xs: 2, md: 3 }, // ✅ 给页面一个正常产品的内边距（你之前是 0）
+        px: { xs: 2, md: 3 },
         py: { xs: 2, md: 3 },
       }}
     >
@@ -712,7 +712,7 @@ export default function Page() {
 
       {/* body */}
       <Grid container spacing={3} alignItems="stretch">
-        {/* ✅ 左小右大：从 md 就开始，不要等 lg */}
+        {/* 左小右大，md 断点就开始 */}
         <Grid item xs={12} md={4} lg={4}>
           <Stack spacing={3} sx={{ minWidth: 0 }}>
             <StatCard follower={localUser.followers || "0"} following={localUser.following || "0"} />
@@ -721,11 +721,11 @@ export default function Page() {
         </Grid>
 
         <Grid item xs={12} md={8} >
-          {/* ✅ 右侧不允许"收缩" */}
+          {/* 右侧固定不收缩 */}
           <Stack spacing={3} sx={{ minWidth: 0 }}>
             {canPost && <ComposerCard user_id={user_id} onPost={loadPosts} />}
 
-            {/* ✅ 内容区容器：固定宽度 + 最小高度，切 tab 不会视觉塌陷/像缩小 */}
+            {/* 内容区：固定宽度+最小高度，切 tab 不塌 */}
             <Box sx={{ width: "100%", minWidth: 0, minHeight: 500 }}>
               {tab === "profile" ? (
                 <Stack spacing={3} sx={{ width: "100%", minWidth: 0 }}>

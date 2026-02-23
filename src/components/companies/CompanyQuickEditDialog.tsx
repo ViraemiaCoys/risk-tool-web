@@ -15,35 +15,37 @@ import {
   Typography,
 } from "@mui/material";
 
-type user_status = "active" | "pending" | "banned" | "rejected";
-
-export type quick_user_value = {
-  user_id: string;
-  name: string;
-  email: string;
-  title_role: string;
-  status: user_status;
+export type quick_company_value = {
+  company_code: string;
+  company_name: string;
+  level: number;
 };
 
-export default function UserQuickEditDialog(props: {
-  open: boolean;
-  user: quick_user_value | null;
-  on_close: () => void;
-  on_submit: (next: quick_user_value) => void;
-}) {
-  const { open, user } = props;
+const level_options = [
+  { value: 1, label: "Level 1 (Top Group)" },
+  { value: 2, label: "Level 2 (Sub Group)" },
+  { value: 3, label: "Level 3 (Operating Sub)" },
+];
 
-  const [value, set_value] = React.useState<quick_user_value | null>(user);
+export default function CompanyQuickEditDialog(props: {
+  open: boolean;
+  company: quick_company_value | null;
+  on_close: () => void;
+  on_submit: (next: quick_company_value) => void;
+}) {
+  const { open, company } = props;
+
+  const [value, set_value] = React.useState<quick_company_value | null>(company);
 
   React.useEffect(() => {
-    set_value(user);
-  }, [user]);
+    set_value(company);
+  }, [company]);
 
-  const update = <K extends keyof quick_user_value>(key: K, next_value: quick_user_value[K]) => {
+  const update = <K extends keyof quick_company_value>(key: K, next_value: quick_company_value[K]) => {
     set_value((prev) => (prev ? { ...prev, [key]: next_value } : prev));
   };
 
-  const can_submit = Boolean(value?.user_id);
+  const can_submit = Boolean(value?.company_code);
 
   return (
     <Dialog open={open} onClose={props.on_close} maxWidth="md" fullWidth>
@@ -61,43 +63,26 @@ export default function UserQuickEditDialog(props: {
             <Grid container spacing={2.5}>
               <Grid item xs={12} md={6}>
                 <TextField
-                  label="Name"
+                  label="Company Name"
                   fullWidth
-                  value={value.name}
-                  onChange={(e) => update("name", e.target.value)}
-                />
-              </Grid>
-
-              <Grid item xs={12} md={6}>
-                <TextField
-                  label="Email address"
-                  fullWidth
-                  value={value.email}
-                  onChange={(e) => update("email", e.target.value)}
-                />
-              </Grid>
-
-              <Grid item xs={12} md={6}>
-                <TextField
-                  label="Title / Role"
-                  fullWidth
-                  value={value.title_role}
-                  onChange={(e) => update("title_role", e.target.value)}
+                  value={value.company_name}
+                  onChange={(e) => update("company_name", e.target.value)}
                 />
               </Grid>
 
               <Grid item xs={12} md={6}>
                 <TextField
                   select
-                  label="Status"
+                  label="Level"
                   fullWidth
-                  value={value.status ?? "active"}
-                  onChange={(e) => update("status", e.target.value as user_status)}
+                  value={value.level}
+                  onChange={(e) => update("level", Number(e.target.value))}
                 >
-                  <MenuItem value="active">active</MenuItem>
-                  <MenuItem value="pending">pending</MenuItem>
-                  <MenuItem value="banned">banned</MenuItem>
-                  <MenuItem value="rejected">rejected</MenuItem>
+                  {level_options.map((opt) => (
+                    <MenuItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </MenuItem>
+                  ))}
                 </TextField>
               </Grid>
             </Grid>
@@ -126,7 +111,7 @@ export default function UserQuickEditDialog(props: {
             </Stack>
           </Box>
         ) : (
-          <Typography sx={{ py: 3, opacity: 0.75 }}>No user selected.</Typography>
+          <Typography sx={{ py: 3, opacity: 0.75 }}>No company selected.</Typography>
         )}
       </DialogContent>
     </Dialog>

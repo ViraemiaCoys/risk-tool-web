@@ -1,7 +1,7 @@
 import { apiClient } from '@/lib/api-client';
 import type { user_row } from '@/data/user.mock';
 
-// 与后端 DTO 匹配的类型
+// 跟后端 DTO 一致
 export type CreateUserDto = {
   name: string;
   email: string;
@@ -25,7 +25,7 @@ export type CreateUserDto = {
 
 export type UpdateUserDto = Partial<CreateUserDto>;
 
-// 后端返回的 User 实体（包含额外字段）
+// 后端返回的用户，带一堆扩展字段
 export type UserEntity = user_row & {
   phone?: string;
   country?: string;
@@ -35,6 +35,12 @@ export type UserEntity = user_row & {
   zip_code?: string;
   company?: string;
   email_verified?: boolean;
+  avatar_url?: string;
+  cover_url?: string;
+  followers?: string;
+  following?: string;
+  total_posts?: string;
+  about?: string;
   created_at?: string;
   updated_at?: string;
 };

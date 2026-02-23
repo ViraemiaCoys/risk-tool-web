@@ -12,7 +12,7 @@ import {
   type ChartEvent,
 } from "chart.js";
 
-import { companies } from "@/data/dummy";
+import { companiesService } from "@/services/companies.service";
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
@@ -21,19 +21,67 @@ type center_state = {
   label: string;
 };
 
-function count_by_level(list: typeof companies) {
-  const l1 = list.filter((c) => c.level === 1).length;
-  const l2 = list.filter((c) => c.level === 2).length;
-  const l3 = list.filter((c) => c.level === 3).length;
-  return { l1, l2, l3, total: list.length };
-}
-
 export default function LevelDonut() {
-  const counts = React.useMemo(() => count_by_level(companies), []);
+  const [counts, setCounts] = React.useState<{ l1: number; l2: number; l3: number; total: number } | null>(null);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<Error | null>(null);
   const [center, set_center] = React.useState<center_state>({
-    value: counts.total,
+    value: 0,
     label: "Total companies",
   });
+
+  React.useEffect(() => {
+    const fetchLevelDistribution = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const data = await companiesService.getLevelDistribution();
+        setCounts(data);
+        // 初始中心文字
+        set_center({
+          value: data.total,
+          label: "Total companies",
+        });
+      } catch (err) {
+        console.error('获取级别分布数据失败:', err);
+        setError(err instanceof Error ? err : new Error('获取级别分布数据失败'));
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchLevelDistribution();
+  }, []);
+
+  // counts 变了就同步 center
+  React.useEffect(() => {
+    if (counts) {
+      set_center((prev) => {
+        if (prev.value === counts.total && prev.label === "Total companies") return prev;
+        return { value: counts.total, label: "Total companies" };
+      });
+    }
+  }, [counts]);
+
+  if (loading || !counts) {
+    return (
+      <Box sx={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <Typography variant="body2" sx={{ opacity: 0.7 }}>
+          {loading ? "加载中..." : "暂无数据"}
+        </Typography>
+      </Box>
+    );
+  }
+
+  if (error) {
+    return (
+      <Box sx={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <Typography variant="body2" sx={{ color: "error.main" }}>
+          加载失败: {error.message}
+        </Typography>
+      </Box>
+    );
+  }
 
   const labels = ["Level 1", "Level 2", "Level 3"];
   const values = [counts.l1, counts.l2, counts.l3];
@@ -56,7 +104,7 @@ export default function LevelDonut() {
 
   const options: ChartOptions<"doughnut"> = {
     responsive: true,
-    maintainAspectRatio: false, // 关键：让图表撑满容器高度
+    maintainAspectRatio: false, // 撑满容器
     animation: { duration: 250 },
     plugins: {
       legend: {
@@ -82,7 +130,7 @@ export default function LevelDonut() {
       },
     },
 
-    // hover 时更新中心文字
+    // 鼠标悬停时改中心数字
     onHover: (event: ChartEvent, active: ActiveElement[]) => {
       if (!active?.length) return;
 
@@ -102,7 +150,7 @@ export default function LevelDonut() {
       sx={{
         width: "100%",
         height: "100%",
-        minHeight: { xs: 520, md: 640 }, // 你要更大可以继续加
+        minHeight: { xs: 520, md: 640 },
         position: "relative",
         p: 0,
       }}
@@ -149,7 +197,7 @@ export default function LevelDonut() {
         </Typography>
       </Box>
 
-      {/* 可选：底部提示（不想要就删掉） */}
+      {/* 底部提示 */}
       <Stack
         direction="row"
         justifyContent="center"

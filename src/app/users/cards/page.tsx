@@ -53,7 +53,7 @@ function user_profile_card(props: { user: user_mock }) {
           image={user.cover_url}
           alt={`${user.name} cover`}
           sx={{
-            height: 160, // 关键：缩小 cover 高度，保证一排三个更像例子
+            height: 160, // 缩小 cover 让一排三个
             objectFit: "cover",
           }}
         />

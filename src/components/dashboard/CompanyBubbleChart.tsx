@@ -11,30 +11,23 @@ type bubble_node = {
   company_code?: string;
   company?: company_row;
   children?: bubble_node[];
-  value?: number; // leaf size
+  value?: number; // 叶子节点大小
 };
 
 function hash_to_index(text: string, modulo: number) {
-  // stable deterministic hash -> index
+  // 稳定 hash 转索引
   let hash = 0;
   for (let i = 0; i < text.length; i += 1) hash = (hash * 31 + text.charCodeAt(i)) >>> 0;
   return modulo <= 0 ? 0 : hash % modulo;
 }
 
-/**
- * 用 dummy companies 生成一个“供应链层级关系”的树：
- * - level 1 作为上游父节点
- * - level 2 随机但稳定地挂到某个 level 1
- * - level 3 随机但稳定地挂到某个 level 2
- *
- * 注意：你们后续如果有真实 relationships，只要把这个函数替换成“按 relationships 建树”即可。
- */
+// 按 level 建供应链树：level1 作根，level2 挂 level1，level3 挂 level2。有真实 relationships 时换成按关系建树。
 function build_supply_chain_hierarchy(filtered_companies: company_row[]): bubble_node {
   const level1_list = filtered_companies.filter((c) => c.level === 1);
   const level2_list = filtered_companies.filter((c) => c.level === 2);
   const level3_list = filtered_companies.filter((c) => c.level === 3);
 
-  // 如果 filter 后某一层为空，做降级兜底：用任意公司当“level1”
+  // 某一层空的话，随便拿几家公司当 level1
   const effective_level1 = level1_list.length ? level1_list : filtered_companies.slice(0, 6);
 
   // maps
@@ -69,7 +62,7 @@ function build_supply_chain_hierarchy(filtered_companies: company_row[]): bubble
     level1_nodes[parent_idx].children!.push(l2);
   }
 
-  // 如果 level2 全空，则把 level3 直接挂 level1
+  // level2 没东西就把 level3 直接挂 level1
   if (!level2_nodes.length) {
     for (const l3 of level3_nodes) {
       const parent_idx = hash_to_index(l3.company_code ?? l3.name, level1_nodes.length);
@@ -77,7 +70,7 @@ function build_supply_chain_hierarchy(filtered_companies: company_row[]): bubble
       level1_nodes[parent_idx].children!.push(l3);
     }
   } else {
-    // attach level3 -> level2（再间接属于某个 level1）
+    // level3 挂 level2
     for (const l3 of level3_nodes) {
       const parent_idx = hash_to_index(l3.company_code ?? l3.name, level2_nodes.length);
       level2_nodes[parent_idx].children = level2_nodes[parent_idx].children ?? [];
@@ -85,12 +78,12 @@ function build_supply_chain_hierarchy(filtered_companies: company_row[]): bubble
     }
   }
 
-  // 清理空 children：否则 pack 会有很多空圈
+  // 清掉空 children，不然 pack 会画一堆空圈
   function prune(node: bubble_node): bubble_node | null {
     if (node.children && node.children.length) {
       const next_children = node.children.map(prune).filter(Boolean) as bubble_node[];
       if (next_children.length === 0) {
-        // 如果非叶子但 children 全空，就把它当叶子（给个 value）
+        // 非叶子但 children 全空，当叶子处理
         return { ...node, children: undefined, value: 1 };
       }
       return { ...node, children: next_children };
@@ -140,7 +133,7 @@ export default function CompanyBubbleChart(props: {
 
     const svg = d3.select(svg_el);
 
-    // style tokens（跟你 BarChart 一致：暗底 + 玻璃）
+    // 配色跟 BarChart 一致
     const stroke_color = "rgba(255,255,255,0.12)";
     const label_color = "rgba(255,255,255,0.85)";
     const sublabel_color = "rgba(255,255,255,0.65)";
@@ -150,7 +143,7 @@ export default function CompanyBubbleChart(props: {
     const fill_l3 = "rgba(255, 82, 82, 0.18)"; // red-ish
     const fill_hover = "rgba(255,255,255,0.10)";
 
-    // 自适应：用 container 宽度决定 viewBox，保证浏览器缩放/布局变化稳定
+    // 按容器宽度算 viewBox，响应缩放
     const get_size = () => {
       const rect = container.getBoundingClientRect();
       const width = Math.max(320, Math.floor(rect.width));
@@ -295,29 +288,29 @@ export default function CompanyBubbleChart(props: {
         });
 
       label
-        .filter(function (n) {
-          return n.parent === focus || (this as SVGTextElement).style.display === "inline";
+        .filter((n, i, nodes) => {
+          const element = nodes[i] as SVGTextElement | undefined;
+          return n.parent === focus || element?.style.display === "inline";
         })
-        .transition(transition as any)
+        .transition(transition)
         .style("display", (n) => (n.parent === focus ? "inline" : "none"))
         .style("opacity", (n) => (n.parent === focus ? 1 : 0));
 
       sublabel
-        .filter(function (n) {
-          return n.parent === focus || (this as SVGTextElement).style.display === "inline";
+        .filter((n, i, nodes) => {
+          const element = nodes[i] as SVGTextElement | undefined;
+          return n.parent === focus || element?.style.display === "inline";
         })
-        .transition(transition as any)
+        .transition(transition)
         .style("display", (n) => (n.parent === focus ? "inline" : "none"))
         .style("opacity", (n) => (n.parent === focus ? 1 : 0));
     }
 
     zoom_to(view);
 
-    // ResizeObserver：容器宽度变化时重绘（保证布局/缩放稳定）
+    // 容器宽度变了就重绘
     const ro = new ResizeObserver(() => {
-      // 直接触发 effect 重跑的最稳方式：通过修改 svg 的 data-attr 来引发重绘也行
-      // 这里简单粗暴：重新 set viewBox + 全量重绘（当前 effect 本身已全量绘制）
-      // 所以：只要容器变了，我们强制触发一次 re-render：通过 requestAnimationFrame 清 tooltip 并重建
+      // 强制 re-render 触发重绘
       set_tooltip((prev) => ({ ...prev, visible: false }));
     });
     ro.observe(container);

@@ -10,13 +10,10 @@ import {
   Card,
   CardContent,
   Divider,
-  FormControl,
   FormControlLabel,
   Grid,
   IconButton,
-  InputAdornment,
   MenuItem,
-  Select,
   Stack,
   Switch,
   TextField,
@@ -24,6 +21,7 @@ import {
 } from "@mui/material";
 import PhotoCameraIcon from "@mui/icons-material/PhotoCamera";
 import { uploadService } from "@/services/upload.service";
+import { getErrorMessage } from "@/lib/error-utils";
 
 type user_status = "active" | "pending" | "banned" | "rejected";
 export type user_form_mode = "create" | "edit";
@@ -39,8 +37,8 @@ export type user_form_value = {
   zip_code: string;
 
   company: string;
-  title_role: string; // 原 role 改名为 title_role（头衔）
-  permission_role: user_role; // 新增：权限 role
+  title_role: string; // 头衔
+  permission_role: user_role; // 权限 role
 
   email_verified: boolean;
   status?: user_status;
@@ -58,7 +56,7 @@ export default function UserForm(props: {
   mode: user_form_mode;
   initial_value?: Partial<user_form_value>;
 
-  // 权限控制：由 page 传入（避免 form 内部用 use_auth）
+  // 权限控制由 page 传入，form 里不用 useAuth
   show_permission_role?: boolean;
   allow_edit_permission_role?: boolean;
 
@@ -89,7 +87,7 @@ export default function UserForm(props: {
   const [uploading, set_uploading] = React.useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
-  // 如果 initial_value 后续变了（比如你从列表切换不同 user），同步一次
+  // initial_value 变了就同步（如切换不同用户）
   React.useEffect(() => {
     if (!props.initial_value) return;
     set_value((prev) => ({ ...prev, ...props.initial_value }));
@@ -153,13 +151,13 @@ export default function UserForm(props: {
                       const file = e.target.files?.[0];
                       if (!file) return;
 
-                      // 验证文件大小（3MB）
+                      // 限制 3MB
                       if (file.size > 3 * 1024 * 1024) {
                         alert("文件大小不能超过 3MB");
                         return;
                       }
 
-                      // 验证文件类型
+                      // 只允许图片
                       const validTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif"];
                       if (!validTypes.includes(file.type)) {
                         alert("只支持 jpeg, jpg, png, gif 格式的图片");
@@ -170,9 +168,9 @@ export default function UserForm(props: {
                       try {
                         const avatarUrl = await uploadService.uploadAvatar(file);
                         update("avatar_url", avatarUrl);
-                      } catch (error: any) {
+                      } catch (error) {
                         console.error("上传头像失败:", error);
-                        alert(error?.message || "上传头像失败，请重试");
+                        alert(getErrorMessage(error, "上传头像失败，请重试"));
                       } finally {
                         set_uploading(false);
                         if (fileInputRef.current) {
@@ -272,46 +270,6 @@ export default function UserForm(props: {
                     value={value.phone}
                     onChange={(e) => update("phone", e.target.value)}
                     sx={field_sx}
-                    InputProps={{
-                      startAdornment: (
-                        <InputAdornment position="start" sx={{ mr: 1 }}>
-                          <FormControl variant="standard">
-                            <Select
-                              value={value.country}
-                              onChange={(e) => update("country", String(e.target.value))}
-                              disableUnderline
-                              sx={{
-                                minWidth: 120,
-                                "& .MuiSelect-select": { display: "flex", alignItems: "center", gap: 1, py: 0 },
-                              }}
-                              renderValue={(selected) => {
-                                const c = country_options.find((x) => x.value === selected) ?? country_options[0];
-                                return (
-                                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                                    <span>{c.flag}</span>
-                                    <Typography variant="body2">
-                                      {c.dial}
-                                    </Typography>
-                                  </Box>
-                                );
-                              }}
-                            >
-                              {country_options.map((c) => (
-                                <MenuItem key={c.value} value={c.value}>
-                                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                                    <span>{c.flag}</span>
-                                    <Typography variant="body2">{c.label}</Typography>
-                                    <Typography variant="body2" sx={{ opacity: 0.65 }}>
-                                      ({c.dial})
-                                    </Typography>
-                                  </Box>
-                                </MenuItem>
-                              ))}
-                            </Select>
-                          </FormControl>
-                        </InputAdornment>
-                      ),
-                    }}
                   />
                 </Grid>
 
@@ -321,42 +279,24 @@ export default function UserForm(props: {
 
                 {/* Row 3: Country | State/region */}
                 <Grid item xs={12} md={6}>
-                  <FormControl fullWidth>
-                    <Typography variant="caption" sx={{ display: "block", mb: 0.5, opacity: 0.75 }}>
-                      Country
-                    </Typography>
-                    <Select
-                      value={value.country}
-                      onChange={(e) => update("country", String(e.target.value))}
-                      sx={{
-                        ...field_sx,
-                        "& .MuiSelect-select": {
-                          color: "rgba(255,255,255,0.9)",
-                        },
-                        "& .MuiSvgIcon-root": {
-                          color: "rgba(255,255,255,0.5)",
-                        },
-                      }}
-                      renderValue={(selected) => {
-                        const c = country_options.find((x) => x.value === selected) ?? country_options[0];
-                        return (
-                          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                            <span>{c.flag}</span>
-                            <Typography variant="body2">{c.label}</Typography>
-                          </Box>
-                        );
-                      }}
-                    >
-                      {country_options.map((c) => (
-                        <MenuItem key={c.value} value={c.value}>
-                          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                            <span>{c.flag}</span>
-                            <Typography variant="body2">{c.label}</Typography>
-                          </Box>
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
+                  <TextField
+                    select
+                    label="Country"
+                    fullWidth
+                    value={value.country}
+                    onChange={(e) => update("country", String(e.target.value))}
+                    sx={field_sx}
+                    SelectProps={{
+                      MenuProps: { sx: { "& .MuiPaper-root": { bgcolor: "background.paper" } } },
+                      sx: { "& .MuiSelect-select": { color: "rgba(255,255,255,0.9)" } },
+                    }}
+                  >
+                    {country_options.map((c) => (
+                      <MenuItem key={c.value} value={c.value}>
+                        {c.label} ({c.dial})
+                      </MenuItem>
+                    ))}
+                  </TextField>
                 </Grid>
 
                 <Grid item xs={12} md={6}>
@@ -384,66 +324,62 @@ export default function UserForm(props: {
                 {/* Permission role：仅当 show_permission_role 为 true 才展示 */}
                 {props.show_permission_role ? (
                   <Grid item xs={12} md={6}>
-                    <Typography variant="caption" sx={{ display: "block", mb: 0.5, opacity: 0.75 }}>
-                      Permission role
-                    </Typography>
-                    <Select
+                    <TextField
+                      select
+                      label="Permission role"
                       fullWidth
                       value={value.permission_role}
                       onChange={(e) => update("permission_role", e.target.value as user_role)}
                       disabled={!props.allow_edit_permission_role}
-                      sx={{
-                        ...field_sx,
-                        "& .MuiSelect-select": {
-                          color: "rgba(255,255,255,0.9)",
-                        },
-                        "& .MuiSvgIcon-root": {
-                          color: "rgba(255,255,255,0.5)",
-                        },
+                      sx={field_sx}
+                      SelectProps={{
+                        MenuProps: { sx: { "& .MuiPaper-root": { bgcolor: "background.paper" } } },
+                        sx: { "& .MuiSelect-select": { color: "rgba(255,255,255,0.9)" } },
                       }}
                     >
                       <MenuItem value="admin">admin</MenuItem>
                       <MenuItem value="manager">manager</MenuItem>
                       <MenuItem value="user">user</MenuItem>
-                    </Select>
+                    </TextField>
                   </Grid>
                 ) : null}
 
                 {/* Status：仅编辑模式显示 */}
                 {mode === "edit" && (
                   <Grid item xs={12} md={6}>
-                    <Typography variant="caption" sx={{ display: "block", mb: 0.5, opacity: 0.75 }}>
-                      Status
-                    </Typography>
-                    <Select
+                    <TextField
+                      select
+                      label="Status"
                       fullWidth
                       value={value.status ?? "active"}
                       onChange={(e) => update("status", e.target.value as user_status)}
-                      sx={{
-                        ...field_sx,
-                        "& .MuiSelect-select": {
-                          color: "rgba(255,255,255,0.9)",
-                        },
-                        "& .MuiSvgIcon-root": {
-                          color: "rgba(255,255,255,0.5)",
-                        },
+                      sx={field_sx}
+                      SelectProps={{
+                        MenuProps: { sx: { "& .MuiPaper-root": { bgcolor: "background.paper" } } },
+                        sx: { "& .MuiSelect-select": { color: "rgba(255,255,255,0.9)" } },
                       }}
                     >
                       <MenuItem value="active">active</MenuItem>
                       <MenuItem value="pending">pending</MenuItem>
                       <MenuItem value="banned">banned</MenuItem>
                       <MenuItem value="rejected">rejected</MenuItem>
-                    </Select>
+                    </TextField>
                   </Grid>
                 )}
               </Grid>
 
-              <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 3 }}>
+              <Stack
+                direction={{ xs: "column", sm: "row" }}
+                spacing={1.5}
+                justifyContent="flex-end"
+                alignItems={{ xs: "stretch", sm: "center" }}
+                sx={{ mt: 3 }}
+              >
                 {props.on_cancel ? (
                   <Button
                     variant="outlined"
                     onClick={props.on_cancel}
-                    sx={{ borderRadius: 2, textTransform: "none", fontWeight: 800, mr: 2 }}
+                    sx={{ borderRadius: 2, textTransform: "none", fontWeight: 800, width: { xs: "100%", sm: "auto" } }}
                   >
                     Cancel
                   </Button>
@@ -451,11 +387,11 @@ export default function UserForm(props: {
                 <Button
                   variant="contained"
                   onClick={() => props.on_submit(value)}
-                  sx={{ borderRadius: 2, textTransform: "none", fontWeight: 800 }}
+                  sx={{ borderRadius: 2, textTransform: "none", fontWeight: 800, width: { xs: "100%", sm: "auto" } }}
                 >
                   {mode === "create" ? "Create user" : "Save changes"}
                 </Button>
-              </Box>
+              </Stack>
             </CardContent>
           </Card>
         </Box>

@@ -45,7 +45,8 @@ export default function KpiCard(props: kpi_card_props) {
         position: "relative",
         height: "100%",
         borderRadius: 3, // 比你之前小：更“现代”，不那么圆
-        p: 1.75,
+        p: 1.5, // 减小 padding，使上边框更整齐
+        pt: 1.5, // 顶部 padding 对齐
         bgcolor: "rgba(255,255,255,0.03)",
         border: "1px solid rgba(255,255,255,0.10)",
         boxShadow: "0 10px 35px rgba(0,0,0,0.35)",
@@ -68,36 +69,43 @@ export default function KpiCard(props: kpi_card_props) {
         <Box
           sx={{
             position: "absolute",
-            top: 14,
-            right: 14,
-            px: 1,
-            py: 0.5,
+            top: 12, // 调整位置，与顶部 padding 对齐
+            right: 12,
+            px: 0.75,
+            py: 0.4,
             borderRadius: 999,
             bgcolor: "rgba(0,0,0,0.25)",
             border: "1px solid rgba(255,255,255,0.10)",
             color: delta_color,
-            fontSize: 12,
+            fontSize: 10, // 减小字体
             display: "flex",
             alignItems: "center",
-            gap: 0.75,
+            gap: 0.5,
             zIndex: 1,
           }}
         >
-          <span style={{ fontSize: 10, opacity: 0.9 }}>{delta_icon}</span>
+          <span style={{ fontSize: 9, opacity: 0.9 }}>{delta_icon}</span>
           <span style={{ fontWeight: 700 }}>{props.delta.label}</span>
         </Box>
       ) : null}
 
-      <Stack direction="row" spacing={2} alignItems="flex-end" sx={{ position: "relative", zIndex: 1 }}>
+      <Stack
+        direction={{ xs: "column", sm: "row" }}
+        spacing={{ xs: 1.5, sm: 2 }}
+        alignItems={{ xs: "flex-start", sm: "flex-end" }}
+        sx={{ position: "relative", zIndex: 1 }}
+      >
         {/* left text */}
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography
             variant="overline"
             sx={{
-              letterSpacing: 1.2,
+              letterSpacing: 1,
               opacity: 0.75,
               display: "block",
-              mb: 0.75,
+              mb: 0.5,
+              fontSize: '0.65rem', // 减小标题字体
+              lineHeight: 1.2,
             }}
           >
             {props.title}
@@ -105,10 +113,10 @@ export default function KpiCard(props: kpi_card_props) {
 
           <Typography
             sx={{
-              fontSize: 34,
+              fontSize: 28, // 从 34 减小到 28
               lineHeight: 1,
               fontWeight: 900,
-              letterSpacing: -1,
+              letterSpacing: -0.5,
               whiteSpace: "nowrap",
               overflow: "hidden",
               textOverflow: "ellipsis",
@@ -124,12 +132,14 @@ export default function KpiCard(props: kpi_card_props) {
         {norm.length ? (
           <Box
             sx={{
-              width: 96,
-              height: 52,
+              width: { xs: "100%", sm: 96 },
+              height: { xs: 48, sm: 52 },
               display: "flex",
               alignItems: "flex-end",
+              justifyContent: { xs: "flex-start", sm: "flex-end" },
               gap: 0.6,
               opacity: 0.9,
+              maxWidth: "100%",
             }}
             aria-label="spark bars"
           >

@@ -20,7 +20,9 @@ import {
   Tabs,
   Tab,
 } from "@mui/material";
+import useMediaQuery from "@mui/material/useMediaQuery";
 import Grid from "@mui/material/Grid";
+import { useTheme } from "@mui/material/styles";
 
 import { Bar } from "react-chartjs-2";
 import type { ChartData, ChartOptions } from "chart.js";
@@ -34,7 +36,8 @@ import {
 } from "chart.js";
 
 import type { company_row, company_relationship_row } from "@/data/dummy";
-import { company_relationships, build_company_hierarchy } from "@/data/dummy";
+import { build_company_hierarchy } from "@/data/dummy";
+import { companiesService } from "@/services/companies.service";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ChartTooltip, Legend);
 
@@ -129,28 +132,7 @@ function apply_company_filters(companies: company_row[], request: company_bar_re
   });
 }
 
-function group_company_counts(filtered_companies: company_row[], dimension: dimension_kind) {
-  const counts = new Map<string, number>();
-
-  for (const company of filtered_companies) {
-    const key =
-      dimension === "level"
-        ? `level ${company.level}`
-        : dimension === "country"
-          ? company.country
-          : company.city;
-
-    counts.set(key, (counts.get(key) ?? 0) + 1);
-  }
-
-  return Array.from(counts.entries())
-    .map(([label, count]) => ({ label, count }))
-    .sort((left, right) => right.count - left.count);
-}
-
-/** =========================
- * bubble (d3 circle packing)
- * ========================= */
+// bubble 图：d3 圆堆积
 type bubble_node = {
   name: string;
   company_code?: string;
@@ -163,7 +145,7 @@ type bubble_node = {
   children?: bubble_node[];
 };
 
-function use_resize_observer<T extends HTMLElement>() {
+function useResizeObserver<T extends HTMLElement>() {
   const ref = React.useRef<T | null>(null);
   const [size, set_size] = React.useState({ width: 0, height: 0 });
 
@@ -192,11 +174,11 @@ function BubbleCirclePacking(props: {
 }) {
   const { companies, relationships, height } = props;
 
-  const { ref, size } = use_resize_observer<HTMLDivElement>();
+  const { ref, size } = useResizeObserver<HTMLDivElement>();
 
   const svg_ref = React.useRef<SVGSVGElement | null>(null);
 
-  // tooltip (simple, MUI-free to keep it fast)
+  // 简单 tooltip，没用 MUI 免得拖慢
   const tooltip_ref = React.useRef<HTMLDivElement | null>(null);
 
   React.useEffect(() => {
@@ -207,10 +189,10 @@ function BubbleCirclePacking(props: {
     const width = size.width;
     const svg_height = height;
 
-    // build hierarchy data from relationships (already aligned with your example)
+    // 按关系建层级
     const tree = build_company_hierarchy(companies, relationships) as bubble_node;
 
-    // d3 setup
+    // d3 初始化
     const svg = d3.select(svg_ref.current);
     svg.selectAll("*").remove();
 
@@ -227,8 +209,7 @@ function BubbleCirclePacking(props: {
     const root = d3
       .hierarchy<bubble_node>(tree)
       .sum((d) => {
-        // 你可以用 revenue / employees 来决定气泡大小；这里先用 employees 更直观
-        // 没有 employees 的节点（父节点）会由子节点累加
+        // 气泡大小用 employees，父节点由子节点累加
         return d.employees ? Math.sqrt(d.employees) : 0;
       })
       .sort((a, b) => (b.value ?? 0) - (a.value ?? 0));
@@ -242,13 +223,11 @@ function BubbleCirclePacking(props: {
 
     const g = svg.append("g");
 
-    const color = d3.scaleLinear<string>().domain([0, 3]).range(["rgba(0,229,255,0.25)", "rgba(0,229,255,0.85)"]);
-
     const nodes = g
       .selectAll("circle")
       .data(root.descendants())
       .join("circle")
-      .attr("display", (d) => (d.depth === 0 ? "none" : "block")) // ✅ root 不画
+      .attr("display", (d) => (d.depth === 0 ? "none" : "block")) // root 不画
       .attr("fill", (d) =>
         d.children ? "rgba(53, 204, 204, 0.05)" : "rgba(255, 255, 255, 0.5)"
       )
@@ -257,7 +236,7 @@ function BubbleCirclePacking(props: {
       )
       .attr("stroke-width", (d) => (d.children ? 1 : 1))
       .on("mousemove", (event, d) => {
-        // optional tooltip：只对叶子节点展示详细信息
+        // 叶子节点才展示详细 tooltip
         const data = d.data;
         if (!data.company_code) return;
 
@@ -302,7 +281,7 @@ function BubbleCirclePacking(props: {
       .style("opacity", (d) => (d.parent === root ? 1 : 0))
       .text((d) => {
         const name = d.data.name ?? "";
-        // 防止太长顶出圈
+        // 名字太长就截断
         return name.length > 16 ? `${name.slice(0, 16)}…` : name;
       });
 
@@ -318,10 +297,16 @@ function BubbleCirclePacking(props: {
         .attr("r", (d) => d.r * k);
     }
 
+    const setTextDisplay = (target: EventTarget | null, display: "block" | "none") => {
+      if (target instanceof SVGTextElement) {
+        target.style.display = display;
+      }
+    };
+
     function zoom(d: typeof root) {
       focus = d;
 
-      const transition = svg
+      const zoomTransition = svg
         .transition()
         .duration(650)
         .ease(d3.easeCubicInOut)
@@ -331,20 +316,28 @@ function BubbleCirclePacking(props: {
         });
 
       labels
-        .filter(function (this: SVGTextElement, n) {
-          return n.parent === focus || (this.style.display === "block" as any);
+        .filter((n, i, nodes) => {
+          const element = nodes[i] as SVGTextElement | undefined;
+          if (!element) {
+            return false;
+          }
+          return n.parent === focus || element.style.display === "block";
         })
-        .transition(transition as any)
+        .transition(zoomTransition)
         .style("fill-opacity", (n) => (n.parent === focus ? 1 : 0))
-        .on("start", function (this: SVGTextElement, n) {
-          if (n.parent === focus) this.style.display = "block";
+        .on("start", (event, n) => {
+          if (n.parent === focus) {
+            setTextDisplay(event.currentTarget, "block");
+          }
         })
-        .on("end", function (this: SVGTextElement, n) {
-          if (n.parent !== focus) this.style.display = "none";
+        .on("end", (event, n) => {
+          if (n.parent !== focus) {
+            setTextDisplay(event.currentTarget, "none");
+          }
         });
     }
 
-    // initial fit
+    // 初次适配
     zoom_to([root.x, root.y, root.r * 2]);
 
     return () => {
@@ -391,40 +384,177 @@ function BubbleCirclePacking(props: {
 
 type chart_mode = "bar" | "bubble";
 
-export default function CompanyBarChart(props: { companies: company_row[] }) {
-  const { companies } = props;
-
+export default function CompanyBarChart() {
+  const theme = useTheme();
+  const is_sm_down = useMediaQuery(theme.breakpoints.down("sm"));
+  const [companies, setCompanies] = React.useState<company_row[]>([]);
   const [request, set_request] = React.useState<company_bar_request>(() => DEFAULT_REQUEST);
   const [mode, set_mode] = React.useState<chart_mode>("bar");
+  const [groupedData, setGroupedData] = React.useState<{ labels: string[]; counts: number[] } | null>(null);
+  const [filterLoading, setFilterLoading] = React.useState(false);
+  
+  // 全部公司关系
+  const [allRelationships, setAllRelationships] = React.useState<company_relationship_row[]>([]);
 
-  // top search keyword to filter option lists (country/city)
+  // 选项搜索（国家/城市）
   const [option_search, set_option_search] = React.useState("");
 
-  // ✅ migrate old state shape after Fast Refresh (founded_year -> joined_year)
+  // 拉公司列表，算 bounds 和下拉选项
   React.useEffect(() => {
-    set_request((prev) => {
-      const prev_any: any = prev as any;
-      const prev_filter: any = prev_any?.filter ?? {};
+    const fetchCompanies = async () => {
+      try {
+        const data = await companiesService.getAll();
+        setCompanies(data);
+      } catch (err) {
+        console.error('获取公司数据失败:', err);
+      }
+    };
 
+    fetchCompanies();
+  }, []);
+
+  // 拉关系数据
+  React.useEffect(() => {
+    const fetchRelationships = async () => {
+      try {
+        const relationships = await companiesService.getRelationships();
+
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[CompanyBarChart] 获取到的关系数据:', relationships);
+          console.log('[CompanyBarChart] 关系数据数量:', relationships.length);
+        }
+
+        setAllRelationships(relationships);
+      } catch (err) {
+        console.error('获取公司关系数据失败:', err);
+        setAllRelationships([]);
+      }
+    };
+
+    fetchRelationships();
+  }, []);
+
+  // 用 ref 跟踪 request，省得依赖乱变
+  const requestRef = React.useRef(request);
+  const prevRequestKeyRef = React.useRef<string>('');
+  
+  // 拼 request 的 key，用来判断有没有变
+  const levelKey = request.filter.level.sort().join(',');
+  const countryKey = request.filter.country.sort().join(',');
+  const cityKey = request.filter.city.sort().join(',');
+  const joinedYearKey = `${request.filter.joined_year.start || ''}-${request.filter.joined_year.end || ''}`;
+  const annualRevenueKey = `${request.filter.annual_revenue.min || ''}-${request.filter.annual_revenue.max || ''}`;
+  const employeesKey = `${request.filter.employees.min || ''}-${request.filter.employees.max || ''}`;
+  
+  const currentRequestKey = React.useMemo(() => {
+    return JSON.stringify({
+      dimension: request.dimension,
+      level: levelKey,
+      country: countryKey,
+      city: cityKey,
+      joined_year: joinedYearKey,
+      annual_revenue: annualRevenueKey,
+      employees: employeesKey,
+    });
+  }, [request.dimension, levelKey, countryKey, cityKey, joinedYearKey, annualRevenueKey, employeesKey]);
+
+  // 过滤条件变了就调 API
+  React.useEffect(() => {
+    // 判断 request 是否真变了（初始加载也放行）
+    const isInitialLoad = prevRequestKeyRef.current === '';
+    const hasChanged = currentRequestKey !== prevRequestKeyRef.current;
+    
+    if (!isInitialLoad && !hasChanged) {
+      return;
+    }
+    
+    prevRequestKeyRef.current = currentRequestKey;
+    requestRef.current = request;
+    
+    const fetchFilteredData = async () => {
+      try {
+        setFilterLoading(true);
+        
+        // 调试
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[CompanyBarChart] 发送过滤请求:', JSON.stringify(requestRef.current, null, 2));
+        }
+        
+        const result = await companiesService.getFilteredCompanies(requestRef.current);
+        
+        // 调试
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[CompanyBarChart] 接收到的过滤数据:', result);
+          console.log('[CompanyBarChart] labels:', result?.labels, '类型:', Array.isArray(result?.labels));
+          console.log('[CompanyBarChart] counts:', result?.counts, '类型:', Array.isArray(result?.counts));
+          console.log('[CompanyBarChart] labels 长度:', result?.labels?.length);
+          console.log('[CompanyBarChart] counts 长度:', result?.counts?.length);
+          console.log('[CompanyBarChart] labels 内容:', result?.labels);
+          console.log('[CompanyBarChart] counts 内容:', result?.counts);
+        }
+        
+        // 格式校验
+        if (!result || !result.labels || !Array.isArray(result.labels) || !result.counts || !Array.isArray(result.counts)) {
+          console.error('[CompanyBarChart] 数据格式不正确:', result);
+          setGroupedData(null);
+          return;
+        }
+        
+        // 空数据也接受
+        if (result.labels.length === 0 || result.counts.length === 0) {
+          console.warn('[CompanyBarChart] 接收到空数据:', result);
+        } else {
+          if (process.env.NODE_ENV === 'development') {
+            console.log('[CompanyBarChart] 数据 OK，设置 groupedData');
+          }
+        }
+        
+        setGroupedData(result);
+      } catch (err) {
+        console.error('[CompanyBarChart] 获取过滤数据失败:', err);
+        setGroupedData(null);
+      } finally {
+        setFilterLoading(false);
+      }
+    };
+
+    // 不等 companies 拉完，直接请求
+    fetchFilteredData();
+  }, [currentRequestKey, request]);
+
+  // Fast Refresh 后兼容旧 state：founded_year -> joined_year
+  React.useEffect(() => {
+    type LegacyFilter = company_bar_request["filter"] & {
+      founded_year?: { start?: number; end?: number };
+    };
+
+    set_request((prev) => {
+      const prev_filter = (prev.filter as LegacyFilter | undefined) ?? DEFAULT_REQUEST.filter;
       const joined_year =
-        prev_filter.joined_year ??
-        prev_filter.founded_year ?? // legacy
-        DEFAULT_REQUEST.filter.joined_year;
+        prev_filter.joined_year ?? prev_filter.founded_year ?? DEFAULT_REQUEST.filter.joined_year;
 
       return {
         ...DEFAULT_REQUEST,
-        ...prev_any,
+        ...prev,
         filter: {
           ...DEFAULT_REQUEST.filter,
-          ...prev_filter,
+          ...prev.filter,
           joined_year,
         },
-      } as company_bar_request;
+      };
     });
   }, []);
 
-  // bounds from data (for sliders)
+  // 滑块范围，从数据算
   const bounds = React.useMemo(() => {
+    if (companies.length === 0) {
+      return {
+        joined: { min: 2010, max: 2024 },
+        revenue: { min: 0, max: 1000000000 },
+        employees: { min: 0, max: 10000 },
+      };
+    }
+
     const joined_years = companies.map((c) => c.joined_year);
     const revenues = companies.map((c) => c.annual_revenue);
     const employees = companies.map((c) => c.employees);
@@ -436,7 +566,7 @@ export default function CompanyBarChart(props: { companies: company_row[] }) {
     };
   }, [companies]);
 
-  // options
+  // 下拉选项
   const country_options_all = React.useMemo(
     () => uniq_sorted(companies.map((c) => c.country)),
     [companies]
@@ -449,7 +579,7 @@ export default function CompanyBarChart(props: { companies: company_row[] }) {
     return uniq_sorted(scoped.map((company) => company.city));
   }, [companies, request.filter.country]);
 
-  // apply option_search to option lists
+  // 按 option_search 筛选项
   const country_options = React.useMemo(() => {
     const keyword = option_search.trim().toLowerCase();
     if (!keyword) return country_options_all;
@@ -464,17 +594,13 @@ export default function CompanyBarChart(props: { companies: company_row[] }) {
 
   const level_options = [1, 2, 3];
 
+  // bubble 图要用 filtered_companies，这里沿用本地过滤逻辑（bar 图数据来自 API）
   const filtered_companies = React.useMemo(
     () => apply_company_filters(companies, request),
     [companies, request]
   );
 
-  const grouped = React.useMemo(
-    () => group_company_counts(filtered_companies, request.dimension),
-    [filtered_companies, request.dimension]
-  );
-
-  // slider derived values (fallback to bounds when unset)
+  // 滑块取值，没设就用 bounds
   const joined_year_slider_value: [number, number] = React.useMemo(() => {
     const joined = request.filter.joined_year ?? {};
     const start = joined.start ?? bounds.joined.min;
@@ -514,13 +640,31 @@ export default function CompanyBarChart(props: { companies: company_row[] }) {
     bounds.employees.max,
   ]);
 
-  // chart colors
+  // 图表配色
   const grid_color = "rgba(255,255,255,0.08)";
   const tick_color = "rgba(255,255,255,0.75)";
 
   const chart_data: ChartData<"bar", number[], string> = React.useMemo(() => {
-    const labels = grouped.map((row) => row.label);
-    const values = grouped.map((row) => row.count);
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[CompanyBarChart] chart_data useMemo - groupedData:', groupedData);
+    }
+    
+    if (!groupedData || !groupedData.labels || !Array.isArray(groupedData.labels) || !groupedData.counts || !Array.isArray(groupedData.counts)) {
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('[CompanyBarChart] chart_data - 数据无效，返回空数据');
+      }
+      return {
+        labels: [],
+        datasets: [{ label: "company count", data: [], backgroundColor: [], borderColor: [] }],
+      };
+    }
+
+    const labels = groupedData.labels;
+    const values = groupedData.counts;
+    
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[CompanyBarChart] chart_data - labels:', labels, 'values:', values);
+    }
 
     const bg_colors =
       request.dimension === "level"
@@ -558,14 +702,17 @@ export default function CompanyBarChart(props: { companies: company_row[] }) {
         },
       ],
     };
-  }, [grouped, request.dimension]);
+  }, [groupedData, request.dimension]);
+
+  const chart_height = is_sm_down ? 360 : 460;
+  const bubble_height = is_sm_down ? 400 : 520;
 
   const chart_options: ChartOptions<"bar"> = React.useMemo(
     () => ({
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
-        legend: { display: false },
+        legend: { display: !is_sm_down },
         tooltip: {
           callbacks: {
             label: (context) => ` ${context.parsed.y ?? 0} companies`,
@@ -574,7 +721,12 @@ export default function CompanyBarChart(props: { companies: company_row[] }) {
       },
       scales: {
         x: {
-          ticks: { color: tick_color },
+          ticks: {
+            color: tick_color,
+            maxRotation: is_sm_down ? 45 : 0,
+            minRotation: is_sm_down ? 30 : 0,
+            maxTicksLimit: is_sm_down ? 4 : 8,
+          },
           grid: { display: false },
         },
         y: {
@@ -584,7 +736,7 @@ export default function CompanyBarChart(props: { companies: company_row[] }) {
         },
       },
     }),
-    []
+    [grid_color, tick_color, is_sm_down]
   );
 
   function reset_filters() {
@@ -592,12 +744,31 @@ export default function CompanyBarChart(props: { companies: company_row[] }) {
     set_option_search("");
   }
 
-  // bubble chart uses shared filters too:
-  // 为了演示更合理：bubble 只显示过滤后的公司；缺失父节点时，会挂到 root（dummy builder 里处理）
-  const filtered_relationships = React.useMemo(() => {
-    const set = new Set(filtered_companies.map((c) => c.company_code));
-    return company_relationships.filter((r) => set.has(r.company_code));
-  }, [filtered_companies]);
+  // bubble 也用同一套过滤；父节点缺失时挂到 root
+  const filtered_relationships: company_relationship_row[] = React.useMemo(() => {
+    if (!filtered_companies || filtered_companies.length === 0) {
+      return [];
+    }
+    
+    // 过滤后的公司 code
+    const filteredCompanyCodes = new Set(filtered_companies.map(c => c.company_code));
+    
+    // 只保留两端都在结果里的关系
+    const filtered = allRelationships.filter(rel => {
+      const hasChild = filteredCompanyCodes.has(rel.company_code);
+      const hasParent = filteredCompanyCodes.has(rel.parent_company);
+      return hasChild && hasParent;
+    });
+    
+    // 调试
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[CompanyBarChart] 过滤后的关系数据:', filtered);
+      console.log('[CompanyBarChart] 过滤后的关系数量:', filtered.length);
+      console.log('[CompanyBarChart] 过滤后的公司数量:', filtered_companies.length);
+    }
+    
+    return filtered;
+  }, [filtered_companies, allRelationships]);
 
   return (
     <Card
@@ -609,7 +780,7 @@ export default function CompanyBarChart(props: { companies: company_row[] }) {
         backdropFilter: "blur(10px)",
       }}
     >
-      <CardContent sx={{ p: 2.5 }}>
+      <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
         <Box sx={{ mb: 1.5 }}>
           <Typography variant="h5" sx={{ fontWeight: 900 }}>
             Company distribution
@@ -639,18 +810,26 @@ export default function CompanyBarChart(props: { companies: company_row[] }) {
               </Tabs>
 
               <Typography variant="caption" sx={{ opacity: 0.75 }}>
-                current: {filtered_companies.length} companies after filters
+                {filterLoading ? "加载中..." : (groupedData?.counts && Array.isArray(groupedData.counts)) ? `${groupedData.counts.reduce((a, b) => a + b, 0)} companies` : "暂无数据"}
               </Typography>
             </Box>
 
-            <Box sx={{ height: { xs: 420, md: 460 }, minWidth: 0 }}>
+            <Box sx={{ height: chart_height, minWidth: 0 }}>
               {mode === "bar" ? (
-                <Bar data={chart_data} options={chart_options} />
+                (groupedData && groupedData.labels && groupedData.labels.length > 0) ? (
+                  <Bar data={chart_data} options={chart_options} />
+                ) : (
+                  <Box sx={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <Typography variant="body2" sx={{ opacity: 0.7 }}>
+                      {filterLoading ? "加载中..." : "暂无数据"}
+                    </Typography>
+                  </Box>
+                )
               ) : (
                 <BubbleCirclePacking
                   companies={filtered_companies}
                   relationships={filtered_relationships}
-                  height={460}
+                  height={bubble_height}
                 />
               )}
             </Box>
@@ -658,7 +837,7 @@ export default function CompanyBarChart(props: { companies: company_row[] }) {
             {mode === "bar" && (
               <Box sx={{ mt: 1.5, opacity: 0.75 }}>
                 <Typography variant="caption">
-                  Current result: {filtered_companies.length} companies after filters
+                  {filterLoading ? "加载中..." : (groupedData?.counts && Array.isArray(groupedData.counts)) ? `Current result: ${groupedData.counts.reduce((a, b) => a + b, 0)} companies after filters` : "暂无数据"}
                 </Typography>
               </Box>
             )}

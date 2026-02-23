@@ -1,15 +1,15 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { use_auth } from "@/auth/auth.context";
-import { can } from "@/auth/rbac";
+import { useAuth } from "@/auth/auth.context";
 import { usersService } from "@/services/users.service";
 import UserForm, { type user_form_value } from "@/components/users/UserForm";
 import RequirePermission from "@/auth/RequirePermission";
+import { getErrorMessage } from "@/lib/error-utils";
 
 export default function UsersCreatePage() {
   const router = useRouter();
-  const { me } = use_auth();
+  const { me } = useAuth();
 
   // admin可以设置任意角色，manager只能创建user角色（且不能修改）
   const can_change_role = me.role === "admin";
@@ -25,7 +25,7 @@ export default function UsersCreatePage() {
         show_permission_role={can_change_role}
         allow_edit_permission_role={can_change_role}
         on_submit={async (value: user_form_value) => {
-          // manager只能创建user角色，即使前端被修改也要确保
+          // manager 只能建 user，前端被改也兜底
           if (me.role === "manager" && value.permission_role !== "user") {
             value.permission_role = "user";
           }
@@ -47,10 +47,9 @@ export default function UsersCreatePage() {
               avatar_url: value.avatar_url || undefined,
             });
             router.push("/users");
-          } catch (error: any) {
+          } catch (error) {
             console.error("创建用户失败:", error);
-            const errorMessage = error?.message || "创建用户失败，请重试";
-            alert(errorMessage);
+            alert(getErrorMessage(error, "创建用户失败，请重试"));
           }
         }}
         on_cancel={() => router.push("/users")}

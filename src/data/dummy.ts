@@ -128,21 +128,16 @@ function code_of(idx0: number) {
   return `c-${String(idx0 + 1).padStart(4, "0")}`;
 }
 
-/**
- * 生成策略：
- * - 40家公司：3个集团(level1) + 若干(level2) + 剩下全部(level3)
- * - 然后生成 relationship：level1 -> level2 -> level3
- * - level 与 parent/child 的组织结构一致（避免“level1下面全是level1”）
- */
+// 生成策略：3 个集团 + 若干 level2 + 剩余 level3，关系 level1->level2->level3
 function make_companies(total: number) {
   const list: company_row[] = [];
 
-  // 你可以调这些参数来控制结构
-  const top_groups = 3; // level1
+  // 可调参数
+  const top_groups = 3; // level1 数量
   const level2_per_group_min = 3;
   const level2_per_group_max = 5;
 
-  // 先占位：level1
+  // 先生 level1
   for (let i = 0; i < top_groups; i++) {
     const idx0 = list.length;
     const geo = seed_geo[(idx0 + 3) % seed_geo.length];
@@ -161,7 +156,7 @@ function make_companies(total: number) {
     });
   }
 
-  // level2：每个集团若干个
+  // level2，每个集团若干个
   const level2_targets: number[] = [];
   for (let g = 0; g < top_groups; g++) {
     const r = pseudo_rand(900 + g);
@@ -189,7 +184,7 @@ function make_companies(total: number) {
     });
   }
 
-  // 剩余全部 level3
+  // 剩下的都是 level3
   while (list.length < total) {
     const idx0 = list.length;
     const geo = seed_geo[idx0 % seed_geo.length];
@@ -218,7 +213,7 @@ function make_relationships(companies_list: company_row[], top_groups: number, l
   const level2 = companies_list.filter((c) => c.level === 2);
   const level3 = companies_list.filter((c) => c.level === 3);
 
-  // 把 level2 按 group 分配到各 level1（按目标数量切片）
+  // level2 按目标数量分给各 level1
   let cursor = 0;
   const level2_by_group: company_row[][] = [];
 
@@ -236,16 +231,15 @@ function make_relationships(companies_list: company_row[], top_groups: number, l
     }
   }
 
-  // 再把 level3 分配给某个 level2（每个 level2 2~4 个，剩余均匀铺开）
-  // 用稳定 pseudo_rand 分配，确保刷新不变
+  // level3 分给 level2，用 pseudo_rand 保证刷新结果一致
   for (let i = 0; i < level3.length; i++) {
     const child = level3[i];
 
-    // 随机选择一个 group
+    // 随机选一个 group
     const g = clamp_int(pseudo_rand(2000 + i) * top_groups, 0, top_groups - 1);
     const candidates = level2_by_group[g];
 
-    // 如果该 group 没有 level2（理论上不会），就挂到该 level1
+    // group 没 level2 就挂 level1（理论上不会发生）
     if (!candidates || candidates.length === 0) {
       relationships.push({ company_code: child.company_code, parent_company: level1[g].company_code });
       continue;
@@ -270,18 +264,12 @@ export const companies: company_row[] = (() => {
 })();
 
 export const company_relationships: company_relationship_row[] = (() => {
-  const total = 40;
-  const { list, top_groups, level2_targets } = make_companies(total);
-  // 注意：companies 与 relationships 必须基于同一份 list
-  // 所以上面 companies 用了 make_companies(total) 生成一次，这里也要同源
-  // 为了避免两次生成导致不一致，这里直接用 export 的 companies
   const level1_count = companies.filter((c) => c.level === 1).length;
 
-  // 重新计算 level2_targets（与 companies 一致）
-  // 由于 companies 已经生成好，按 level2 在 companies 中的顺序切片即可：
+  // 按 companies 里 level2 的顺序重新切片
   const level2_total = companies.filter((c) => c.level === 2).length;
 
-  // 用一个稳定拆分：尽量均匀分配给 level1_count 个集团
+  // 尽量均匀分给各集团
   const base = Math.floor(level2_total / level1_count);
   const rem = level2_total % level1_count;
   const targets = Array.from({ length: level1_count }, (_, i) => base + (i < rem ? 1 : 0));
@@ -327,7 +315,7 @@ export function build_company_hierarchy(
     children_by_parent.set(rel.parent_company, arr);
   }
 
-  // 找根：没有 parent 的公司就是 root candidates（通常是 level1）
+  // 没 parent 的是根，一般是 level1
   const roots = companies_list
     .filter((c) => !parent_by_child.has(c.company_code))
     .map((c) => c.company_code);
@@ -356,7 +344,7 @@ export function build_company_hierarchy(
 
   const root_children = roots.map(make_node);
 
-  // 兜底：如果存在孤儿（例如过滤后 parent 不在 companies_list），挂到 root
+  // 孤儿节点（parent 不在列表里）挂到 root
   const orphans = companies_list
     .filter((c) => !visited.has(c.company_code))
     .map((c) => ({

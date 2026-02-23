@@ -19,7 +19,7 @@ import {
 import SearchIcon from "@mui/icons-material/Search";
 import AddIcon from "@mui/icons-material/Add";
 
-import { use_auth } from "@/auth/auth.context";
+import { useAuth } from "@/auth/auth.context";
 import { can } from "@/auth/rbac";
 
 import UserTable from "@/components/UserTable";
@@ -34,7 +34,7 @@ function normalize(value: string) {
 
 export default function UsersListPage() {
   const router = useRouter();
-  const { me } = use_auth();
+  const { me } = useAuth();
   const { users: all_users, loading, refresh } = useUsers();
 
   const [status, set_status] = React.useState<user_status>("all");
@@ -90,7 +90,13 @@ export default function UsersListPage() {
 
   return (
     <Box>
-      <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
+      <Stack
+        direction={{ xs: "column", md: "row" }}
+        spacing={1.5}
+        alignItems={{ xs: "flex-start", md: "center" }}
+        justifyContent="space-between"
+        sx={{ mb: 2 }}
+      >
         <Box>
           <Typography variant="h4" sx={{ fontWeight: 800 }}>
             Users
@@ -106,6 +112,7 @@ export default function UsersListPage() {
             variant="contained"
             startIcon={<AddIcon />}
             onClick={() => router.push("/users/create")}
+            sx={{ width: { xs: "100%", md: "auto" } }}
           >
             add user
           </Button>
@@ -126,7 +133,7 @@ export default function UsersListPage() {
         <Tab value="rejected" label={<Stack direction="row" spacing={1} alignItems="center"><span>rejected</span><Chip size="small" label={counts.rejected} /></Stack>} />
       </Tabs>
 
-      <Stack direction={{ xs: "column", md: "row" }} spacing={2} sx={{ mb: 2 }}>
+      <Stack direction={{ xs: "column", md: "row" }} spacing={{ xs: 1.5, md: 2 }} sx={{ mb: 2 }}>
         <Select
           value={role}
           onChange={(e) => set_role(String(e.target.value))}
@@ -145,7 +152,7 @@ export default function UsersListPage() {
           onChange={(e) => set_query(e.target.value)}
           size="small"
           placeholder="search by name / email / phone / company"
-          sx={{ flexGrow: 1 }}
+          sx={{ flexGrow: 1, width: { xs: "100%", md: "auto" } }}
           InputProps={{
             startAdornment: (
               <InputAdornment position="start">

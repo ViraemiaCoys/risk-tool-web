@@ -103,5 +103,12 @@ export const users_mock: user_mock[] = [
 ];
 
 export const users_list_rows: user_row[] = users_mock.map(
-  ({ avatar_url, cover_url, followers, following, total_posts, ...row }) => row
+  ({ user_id, name, email, title_role, permission_role, status }) => ({
+    user_id,
+    name,
+    email,
+    title_role,
+    permission_role,
+    status,
+  })
 );
