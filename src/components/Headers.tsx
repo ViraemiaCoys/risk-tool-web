@@ -12,7 +12,6 @@ import {
   Tooltip,
   Menu,
   MenuItem,
-  Chip,
   Stack,
 } from "@mui/material";
 
@@ -21,11 +20,9 @@ import LanguageIcon from "@mui/icons-material/Language";
 import NotificationsNoneIcon from "@mui/icons-material/NotificationsNone";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import PeopleOutlineIcon from "@mui/icons-material/PeopleOutline";
-import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 
 import ContactsPopover from "@/components/ContactsPopover";
 import { useAuth } from "@/auth/auth.context";
-import type { user_role } from "@/auth/auth.types";
 import { useRouter } from "next/navigation";
 import LogoutIcon from "@mui/icons-material/Logout";
 import AccountCircleIcon from "@mui/icons-material/AccountCircle";
@@ -33,24 +30,11 @@ import MenuIcon from "@mui/icons-material/Menu";
 
 export default function Header(props: { title: string; onToggleNav?: () => void }) {
   const router = useRouter();
-  const { me, switch_role, logout } = useAuth();
+  const { me, logout } = useAuth();
   const [contactsAnchor, setContactsAnchor] =
-    React.useState<HTMLElement | null>(null);
-  const [roleMenuAnchor, setRoleMenuAnchor] =
     React.useState<HTMLElement | null>(null);
   const [userMenuAnchor, setUserMenuAnchor] =
     React.useState<HTMLElement | null>(null);
-
-  const roles: user_role[] = ["admin", "manager", "user"];
-
-  const handleRoleClick = (event: React.MouseEvent<HTMLElement>) => {
-    setRoleMenuAnchor(event.currentTarget);
-  };
-
-  const handleRoleSelect = (role: user_role) => {
-    switch_role(role);
-    setRoleMenuAnchor(null);
-  };
 
   const handleUserMenuClick = (event: React.MouseEvent<HTMLElement>) => {
     setUserMenuAnchor(event.currentTarget);
@@ -106,28 +90,6 @@ export default function Header(props: { title: string; onToggleNav?: () => void 
           justifyContent="flex-end"
           sx={{ width: { xs: "100%", sm: "auto" } }}
         >
-          {/* Role Switcher (开发模式) */}
-          <Box sx={{ width: { xs: "100%", sm: "auto" } }}>
-            <Tooltip title={`当前角色: ${me?.role || "user"} (点击切换)`}>
-              <Chip
-                icon={<SwapHorizIcon />}
-                label={(me?.role || "user").toUpperCase()}
-                onClick={handleRoleClick}
-                color={me?.role === "admin" ? "error" : me?.role === "manager" ? "warning" : "default"}
-                variant="outlined"
-                sx={{
-                  width: { xs: "100%", sm: "auto" },
-                  cursor: "pointer",
-                  fontWeight: 700,
-                  borderWidth: 2,
-                  "&:hover": {
-                    borderWidth: 2,
-                  },
-                }}
-              />
-            </Tooltip>
-          </Box>
-
           <Stack
             direction="row"
             spacing={0.5}
@@ -205,52 +167,6 @@ export default function Header(props: { title: string; onToggleNav?: () => void 
             </Tooltip>
           </Stack>
         </Stack>
-
-        {/* Role Switch Menu */}
-        <Menu
-          anchorEl={roleMenuAnchor}
-          open={Boolean(roleMenuAnchor)}
-          onClose={() => setRoleMenuAnchor(null)}
-          anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
-          transformOrigin={{ vertical: "top", horizontal: "right" }}
-          PaperProps={{
-            sx: {
-              bgcolor: "rgba(20,20,20,0.98)",
-              border: "1px solid rgba(255,255,255,0.10)",
-              borderRadius: 2,
-              minWidth: 180,
-            },
-          }}
-        >
-          <MenuItem
-            disabled
-            sx={{
-              opacity: 0.7,
-              fontSize: 12,
-              fontWeight: 700,
-              textTransform: "uppercase",
-            }}
-          >
-            切换角色
-          </MenuItem>
-          {roles.map((role) => (
-            <MenuItem
-              key={role}
-              selected={me?.role === role}
-              onClick={() => handleRoleSelect(role)}
-              sx={{
-                fontWeight: me?.role === role ? 800 : 400,
-                bgcolor: me?.role === role ? "rgba(255,255,255,0.08)" : "transparent",
-              }}
-            >
-              {role === "admin" && "👑 "}
-              {role === "manager" && "🔧 "}
-              {role === "user" && "👤 "}
-              {role.toUpperCase()}
-              {me?.role === role && " (当前)"}
-            </MenuItem>
-          ))}
-        </Menu>
 
         {/* User Menu */}
         <Menu

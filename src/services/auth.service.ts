@@ -14,6 +14,7 @@ export type RegisterDto = {
   password: string;
   confirmPassword: string;
   phone?: string;
+  permission_role?: "admin" | "manager" | "user";
 };
 
 // 后端返回：access_token + permission_role

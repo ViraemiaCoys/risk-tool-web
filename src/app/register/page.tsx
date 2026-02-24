@@ -10,15 +10,19 @@ import {
   CardContent,
   IconButton,
   InputAdornment,
+  Menu,
+  MenuItem,
   Stack,
   TextField,
   Typography,
 } from "@mui/material";
+import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
 import { useAuth } from "@/auth/auth.context";
 import type { RegisterDto } from "@/services/auth.service";
 import { getErrorMessage } from "@/lib/error-utils";
+import type { user_role } from "@/auth/auth.types";
 
 type RegisterFormData = RegisterDto & {
   confirmPassword: string;
@@ -35,10 +39,14 @@ export default function RegisterPage() {
     confirmPassword: "",
     phone: "",
   });
+  const [selectedRole, setSelectedRole] = React.useState<user_role>("user");
+  const [roleMenuAnchor, setRoleMenuAnchor] = React.useState<HTMLElement | null>(null);
   const [showPassword, setShowPassword] = React.useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+
+  const roles: user_role[] = ["admin", "manager", "user"];
 
   // 如果已登录，重定向到首页
   React.useEffect(() => {
@@ -99,6 +107,7 @@ export default function RegisterPage() {
         password: formData.password,
         confirmPassword: formData.confirmPassword,
         phone: formData.phone || undefined,
+        permission_role: selectedRole,
       };
       await register(registerData);
       router.push("/");
@@ -169,6 +178,7 @@ export default function RegisterPage() {
                     onChange={handleChange("name")}
                     required
                     disabled={loading}
+                    InputLabelProps={{ shrink: true }}
                     sx={{
                       "& .MuiOutlinedInput-root": {
                         bgcolor: "background.default",
@@ -184,6 +194,7 @@ export default function RegisterPage() {
                     onChange={handleChange("email")}
                     required
                     disabled={loading}
+                    InputLabelProps={{ shrink: true }}
                     sx={{
                       "& .MuiOutlinedInput-root": {
                         bgcolor: "background.default",
@@ -197,12 +208,101 @@ export default function RegisterPage() {
                     value={formData.phone}
                     onChange={handleChange("phone")}
                     disabled={loading}
+                    InputLabelProps={{ shrink: true }}
                     sx={{
                       "& .MuiOutlinedInput-root": {
                         bgcolor: "background.default",
                       },
                     }}
                   />
+
+                  {/* 角色选择 */}
+                  <Box>
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        display: "block",
+                        mb: 1,
+                        color: "text.secondary",
+                        fontWeight: 500,
+                      }}
+                    >
+                      选择角色
+                    </Typography>
+                    <Button
+                      fullWidth
+                      variant="outlined"
+                      startIcon={<SwapHorizIcon />}
+                      onClick={(e) => setRoleMenuAnchor(e.currentTarget)}
+                      disabled={loading}
+                      sx={{
+                        justifyContent: "flex-start",
+                        py: 1.5,
+                        borderColor: "rgba(255,255,255,0.23)",
+                        color: "text.primary",
+                        bgcolor: "background.default",
+                        "&:hover": {
+                          borderColor: "rgba(255,255,255,0.4)",
+                          bgcolor: "rgba(255,255,255,0.05)",
+                        },
+                      }}
+                    >
+                      {selectedRole === "admin" && "👑 "}
+                      {selectedRole === "manager" && "🔧 "}
+                      {selectedRole === "user" && "👤 "}
+                      {selectedRole.toUpperCase()}
+                    </Button>
+                    <Menu
+                      anchorEl={roleMenuAnchor}
+                      open={Boolean(roleMenuAnchor)}
+                      onClose={() => setRoleMenuAnchor(null)}
+                      anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
+                      transformOrigin={{ vertical: "top", horizontal: "left" }}
+                      PaperProps={{
+                        sx: {
+                          bgcolor: "rgba(20,20,20,0.98)",
+                          border: "1px solid rgba(255,255,255,0.10)",
+                          borderRadius: 2,
+                          minWidth: 180,
+                        },
+                      }}
+                    >
+                      <MenuItem
+                        disabled
+                        sx={{
+                          opacity: 0.7,
+                          fontSize: 12,
+                          fontWeight: 700,
+                          textTransform: "uppercase",
+                        }}
+                      >
+                        选择角色
+                      </MenuItem>
+                      {roles.map((role) => (
+                        <MenuItem
+                          key={role}
+                          selected={selectedRole === role}
+                          onClick={() => {
+                            setSelectedRole(role);
+                            setRoleMenuAnchor(null);
+                          }}
+                          sx={{
+                            fontWeight: selectedRole === role ? 800 : 400,
+                            bgcolor:
+                              selectedRole === role
+                                ? "rgba(34, 197, 94, 0.2)"
+                                : "transparent",
+                          }}
+                        >
+                          {role === "admin" && "👑 "}
+                          {role === "manager" && "🔧 "}
+                          {role === "user" && "👤 "}
+                          {role.toUpperCase()}
+                          {selectedRole === role && " (已选)"}
+                        </MenuItem>
+                      ))}
+                    </Menu>
+                  </Box>
 
                   <TextField
                     fullWidth
@@ -212,6 +312,7 @@ export default function RegisterPage() {
                     onChange={handleChange("password")}
                     required
                     disabled={loading}
+                    InputLabelProps={{ shrink: true }}
                     helperText="密码长度至少为 6 位"
                     InputProps={{
                       endAdornment: (
@@ -245,6 +346,7 @@ export default function RegisterPage() {
                     onChange={handleChange("confirmPassword")}
                     required
                     disabled={loading}
+                    InputLabelProps={{ shrink: true }}
                     InputProps={{
                       endAdornment: (
                         <InputAdornment position="end">

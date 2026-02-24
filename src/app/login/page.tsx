@@ -122,6 +122,7 @@ export default function LoginPage() {
                     onChange={handleChange("email")}
                     required
                     disabled={loading}
+                    InputLabelProps={{ shrink: true }}
                     sx={{
                       "& .MuiOutlinedInput-root": {
                         bgcolor: "background.default",
@@ -137,6 +138,7 @@ export default function LoginPage() {
                     onChange={handleChange("password")}
                     required
                     disabled={loading}
+                    InputLabelProps={{ shrink: true }}
                     InputProps={{
                       endAdornment: (
                         <InputAdornment position="end">
